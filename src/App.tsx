@@ -33,6 +33,23 @@ export function App() {
     }
   }, []);
 
+  const handleMovePlayer = useCallback((playerId: string, to: 'starter' | 'bench') => {
+    if (!gameState) return;
+    const team = gameState.teams.get(gameState.playerTeamId);
+    if (!team) return;
+    const newTeam = { ...team };
+    if (to === 'bench') {
+      newTeam.rosterIds = newTeam.rosterIds.filter(id => id !== playerId);
+      if (!newTeam.subIds.includes(playerId)) newTeam.subIds = [...newTeam.subIds, playerId];
+    } else {
+      if (newTeam.rosterIds.length >= 5) return;
+      newTeam.subIds = newTeam.subIds.filter(id => id !== playerId);
+      if (!newTeam.rosterIds.includes(playerId)) newTeam.rosterIds = [...newTeam.rosterIds, playerId];
+    }
+    gameState.teams.set(gameState.playerTeamId, newTeam);
+    setGameState({ ...gameState });
+  }, [gameState]);
+
   const handleAdvanceWeek = useCallback(async () => {
     if (!gameState) return;
     setLoading(true);
@@ -63,7 +80,7 @@ export function App() {
   return (
     <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
       {nav === 'dashboard'  && <Dashboard  state={gameState} />}
-      {nav === 'roster'     && <Roster     state={gameState} />}
+      {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} />}
       {nav === 'transfers'  && <TransferMarket state={gameState} />}
       {nav === 'matchday'   && <MatchDay   state={gameState} />}
       {nav === 'standings'  && <Standings  state={gameState} />}

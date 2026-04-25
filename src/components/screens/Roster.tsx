@@ -3,7 +3,10 @@ import type { GameState, Player, PlayerRoleRatingRecord } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
 
-interface Props { state: GameState; }
+interface Props {
+  state: GameState;
+  onMovePlayer: (playerId: string, to: 'starter' | 'bench') => void;
+}
 
 const ROLE_COLORS: Record<string, string> = {
   duelist:    'var(--role-duelist)',
@@ -12,7 +15,13 @@ const ROLE_COLORS: Record<string, string> = {
   sentinel:   'var(--role-sentinel)',
 };
 
-function PlayerDetail({ player, roleRatings }: { player: Player; roleRatings: PlayerRoleRatingRecord[] }) {
+function PlayerDetail({ player, roleRatings, isStarter, canPromote, onMove }: {
+  player: Player;
+  roleRatings: PlayerRoleRatingRecord[];
+  isStarter: boolean;
+  canPromote: boolean;
+  onMove: (playerId: string, to: 'starter' | 'bench') => void;
+}) {
   return (
     <div className="card p-4 flex-col gap-3" style={{ minWidth: 300 }}>
       <div>
@@ -77,6 +86,24 @@ function PlayerDetail({ player, roleRatings }: { player: Player; roleRatings: Pl
         <span className="text-dim text-xs">Main agent: </span>
         <span className="text-xs font-head uppercase" style={{ color: ROLE_COLORS[player.primaryRole] }}>{player.mainAgent}</span>
       </div>
+
+      <div style={{ paddingTop: 4 }}>
+        {isStarter ? (
+          <button className="btn btn-red" style={{ width: '100%' }} onClick={() => onMove(player.id, 'bench')}>
+            Move to Bench
+          </button>
+        ) : (
+          <button
+            className="btn btn-teal"
+            style={{ width: '100%' }}
+            disabled={!canPromote}
+            title={!canPromote ? 'Starting lineup is full (5/5)' : undefined}
+            onClick={() => onMove(player.id, 'starter')}
+          >
+            Promote to Starting
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -99,13 +126,17 @@ function PlayerRow({ player, selected, onClick }: { player: Player; selected: bo
   );
 }
 
-export function Roster({ state }: Props) {
+export function Roster({ state, onMovePlayer }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'starters' | 'subs'>('starters');
 
   const team = state.teams.get(state.playerTeamId);
-  const starters = (team?.rosterIds ?? []).map(id => state.players.get(id)).filter(Boolean) as Player[];
-  const subs = (team?.subIds ?? []).map(id => state.players.get(id)).filter(Boolean) as Player[];
+  const starterIds = new Set(team?.rosterIds ?? []);
+  const starters = [...starterIds].map(id => state.players.get(id)).filter(Boolean) as Player[];
+  const subs = (team?.subIds ?? [])
+    .filter(id => !starterIds.has(id))
+    .map(id => state.players.get(id))
+    .filter(Boolean) as Player[];
   const listed = tab === 'starters' ? starters : subs;
 
   const selectedPlayer = selectedId ? state.players.get(selectedId) ?? null : null;
@@ -160,7 +191,13 @@ export function Roster({ state }: Props) {
       {/* Right detail panel */}
       {selectedPlayer && (
         <div className="scroll-area" style={{ width: 340, padding: 16, borderLeft: '1px solid var(--border)' }}>
-          <PlayerDetail player={selectedPlayer} roleRatings={selectedRoleRatings} />
+          <PlayerDetail
+            player={selectedPlayer}
+            roleRatings={selectedRoleRatings}
+            isStarter={starterIds.has(selectedPlayer.id)}
+            canPromote={starters.length < 5}
+            onMove={onMovePlayer}
+          />
         </div>
       )}
     </div>

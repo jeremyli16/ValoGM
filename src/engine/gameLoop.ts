@@ -1,6 +1,6 @@
 import type {
   GameState, ScheduledMatch, Player, Team, Notification,
-  StandingsRow, PlayoffBracket, PlayoffMatch,
+  StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -333,6 +333,103 @@ function simPlayoffStage(state: GameState): GameState {
   return state;
 }
 
+// ─── Roster auto-fill ────────────────────────────────────────────────────────
+
+const ROLES: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
+
+function skillScore(p: Player): number {
+  return p.trueAim * 0.55 + p.trueGameSense * 0.45;
+}
+
+export function autoFillRoster(state: GameState): GameState {
+  const team = state.teams.get(state.playerTeamId);
+  if (!team || team.rosterIds.length >= 5) return state;
+
+  const starterSet = new Set(team.rosterIds);
+  const newRoster = [...team.rosterIds];
+
+  // Bench candidates not already starting, sorted best-first
+  let benchPool = team.subIds
+    .filter(id => !starterSet.has(id))
+    .map(id => state.players.get(id))
+    .filter((p): p is Player => !!p)
+    .sort((a, b) => skillScore(b) - skillScore(a));
+
+  // Free agent candidates sorted best-first
+  let faPool = state.freeAgents
+    .map(id => state.players.get(id))
+    .filter((p): p is Player => !!p)
+    .sort((a, b) => skillScore(b) - skillScore(a));
+
+  const teamId = team.id;
+  const promotedFromBench: string[] = [];
+  const signedFromFA: string[] = [];
+
+  function promote(p: Player, isBench: boolean) {
+    if (newRoster.includes(p.id)) return;
+    newRoster.push(p.id);
+    if (isBench) {
+      benchPool = benchPool.filter(x => x.id !== p.id);
+      promotedFromBench.push(p.id);
+    } else {
+      faPool = faPool.filter(x => x.id !== p.id);
+      signedFromFA.push(p.id);
+      const contractId = `auto_${p.id}_s${state.season}`;
+      state.players.set(p.id, { ...p, teamId, contractId });
+      state.dirtyPlayers.add(p.id);
+      state.contracts.set(contractId, {
+        id: contractId,
+        playerId: p.id,
+        teamId,
+        salary: p.salary,
+        length: 1,
+        buyout: Math.round(p.salary * 2),
+        startSeason: state.season,
+        endSeason: state.season,
+      });
+      state.notifications.push({
+        id: notifId(),
+        type: 'development',
+        title: 'Free Agent Signed',
+        body: `${p.alias} signed to fill a vacant starting spot.`,
+        week: state.week,
+        read: false,
+      });
+    }
+  }
+
+  // Pass 1: fill each missing role (bench first, then FA)
+  for (const role of ROLES) {
+    if (newRoster.length >= 5) break;
+    const currentRoles = new Set(newRoster.map(id => state.players.get(id)?.primaryRole));
+    if (currentRoles.has(role)) continue;
+    const fromBench = benchPool.find(p => p.primaryRole === role);
+    if (fromBench) { promote(fromBench, true); continue; }
+    const fromFA = faPool.find(p => p.primaryRole === role);
+    if (fromFA) promote(fromFA, false);
+  }
+
+  // Pass 2: fill remaining slots by skill (bench preferred over FA)
+  while (newRoster.length < 5) {
+    const b = benchPool[0];
+    const f = faPool[0];
+    if (!b && !f) break;
+    if (b && (!f || skillScore(b) >= skillScore(f))) promote(b, true);
+    else if (f) promote(f, false);
+    else break;
+  }
+
+  // Commit
+  team.rosterIds = newRoster;
+  const promotedSet = new Set(promotedFromBench);
+  team.subIds = team.subIds.filter(id => !promotedSet.has(id));
+  const signedSet = new Set(signedFromFA);
+  state.freeAgents = state.freeAgents.filter(id => !signedSet.has(id));
+  state.teams.set(team.id, team);
+
+  return state;
+}
+
 // ─── Main advanceWeek ─────────────────────────────────────────────────────────
 
 export function advanceWeek(state: GameState): GameState {
@@ -351,6 +448,7 @@ export function advanceWeek(state: GameState): GameState {
   }
 
   if (state.phase === 'regular_season') {
+    state = autoFillRoster(state);
     state = simWeekMatches(state);
     state = weeklyPlayerTick(state);
     state = checkContractExpiry(state);
@@ -360,6 +458,7 @@ export function advanceWeek(state: GameState): GameState {
   }
 
   if (state.phase === 'playoffs') {
+    state = autoFillRoster(state);
     state = simPlayoffStage(state);
     state = weeklyPlayerTick(state);
     state.week++;
