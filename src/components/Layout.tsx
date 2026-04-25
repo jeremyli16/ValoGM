@@ -23,7 +23,7 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
 
 function phaseTag(state: GameState) {
   const p = state.phase;
-  if (p === 'regular_season') return `Season ${state.season} — Act ${state.act} — Week ${state.week}`;
+  if (p === 'regular_season') return `Season ${state.season} — Split ${state.act} — Week ${state.week}`;
   if (p === 'playoffs') return `Season ${state.season} — Playoffs`;
   if (p === 'offseason') return `Offseason — Week ${state.week}`;
   if (p === 'preseason') return 'Preseason';
