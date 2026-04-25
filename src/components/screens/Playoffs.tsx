@@ -7,17 +7,21 @@ interface Props { state: GameState; }
 
 function getOriginalSeeds(bracket: PlayoffBracket): string[] {
   const find = (round: string) => bracket.matches.find(m => m.round === round);
+  const ur1a = find('UR1A');
+  const ur1b = find('UR1B');
   const usf1 = find('USF1');
   const usf2 = find('USF2');
-  const uqf1 = find('UQF1');
-  const uqf2 = find('UQF2');
+  const lr1a = find('LR1A');
+  const lr1b = find('LR1B');
   return [
-    usf1?.teamAId,  // s1
-    usf2?.teamAId,  // s2
-    uqf1?.teamAId,  // s3
-    uqf2?.teamAId,  // s4
-    uqf2?.teamBId,  // s5
-    uqf1?.teamBId,  // s6
+    usf1?.teamAId,   // s1 = A1 (bye)
+    usf2?.teamAId,   // s2 = B1 (bye)
+    ur1b?.teamAId,   // s3 = A2
+    ur1a?.teamAId,   // s4 = B2
+    ur1a?.teamBId,   // s5 = A3
+    ur1b?.teamBId,   // s6 = B3
+    lr1b?.teamBId,   // s7 = A4
+    lr1a?.teamBId,   // s8 = B4
   ].filter((id): id is string => !!id);
 }
 
@@ -39,6 +43,7 @@ function getProjectedSeeds(state: GameState): string[] {
     groupA[0]?.teamId, groupB[0]?.teamId,
     groupA[1]?.teamId, groupB[1]?.teamId,
     groupA[2]?.teamId, groupB[2]?.teamId,
+    groupA[3]?.teamId, groupB[3]?.teamId,
   ].filter((id): id is string => !!id);
 }
 
@@ -53,7 +58,7 @@ function getDisplayBracket(state: GameState): {
     };
   }
   const seeds = getProjectedSeeds(state);
-  if (seeds.length < 6) {
+  if (seeds.length < 8) {
     return { bracket: { matches: [], champion: null }, isProjected: true, seeds };
   }
   const bracket = buildPlayoffBracket(state.leagueId, state.season, seeds);
@@ -63,11 +68,12 @@ function getDisplayBracket(state: GameState): {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 const ROUND_LABEL: Record<string, string> = {
-  UQF1: 'Upper QF', UQF2: 'Upper QF',
+  UR1A: 'Upper R1', UR1B: 'Upper R1',
   USF1: 'Upper SF', USF2: 'Upper SF',
   UF:   'Upper Final',
-  LR1:  'Lower R1',
-  LSF:  'Lower SF',
+  LR1A: 'Lower R1', LR1B: 'Lower R1',
+  LR2A: 'Lower R2', LR2B: 'Lower R2',
+  LR3:  'Lower SF',
   LF:   'Lower Final',
   GF:   'Grand Final',
 };
@@ -182,8 +188,6 @@ function MatchCard({ match, state, seeds, playerTeamId }: {
   );
 }
 
-// ─── Column helpers ────────────────────────────────────────────────────────────
-
 function BracketColumn({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -201,7 +205,6 @@ function BracketColumn({ label, children }: { label: string; children: React.Rea
   );
 }
 
-// Vertically centers a single match card within a column of a given min-height
 function CenteredMatch({ children, minHeight }: { children: React.ReactNode; minHeight?: number }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', flex: 1, minHeight }}>
@@ -238,7 +241,7 @@ export function Playoffs({ state }: Props) {
   };
 
   const champion = bracket.champion ? state.teams.get(bracket.champion) : null;
-  const QF_HEIGHT = 84; // px — approx height of one match card
+  const CARD_H = 84;
 
   return (
     <div style={{ height: '100%', padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -261,7 +264,7 @@ export function Playoffs({ state }: Props) {
 
       {isProjected && (
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -12 }}>
-          Seedings based on current standings. Top 3 from each group qualify.
+          Seedings based on current standings. Top 4 from each group qualify.
         </p>
       )}
 
@@ -276,16 +279,16 @@ export function Playoffs({ state }: Props) {
           Upper Bracket
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <BracketColumn label="Quarterfinals">
-            {card('UQF1')}
-            {card('UQF2')}
+          <BracketColumn label="Round 1">
+            {card('UR1A')}
+            {card('UR1B')}
           </BracketColumn>
           <BracketColumn label="Semifinals">
-            <CenteredMatch minHeight={QF_HEIGHT}>{card('USF1')}</CenteredMatch>
-            <CenteredMatch minHeight={QF_HEIGHT}>{card('USF2')}</CenteredMatch>
+            <CenteredMatch minHeight={CARD_H}>{card('USF1')}</CenteredMatch>
+            <CenteredMatch minHeight={CARD_H}>{card('USF2')}</CenteredMatch>
           </BracketColumn>
           <BracketColumn label="Final">
-            <CenteredMatch minHeight={QF_HEIGHT * 2 + 8}>{card('UF')}</CenteredMatch>
+            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('UF')}</CenteredMatch>
           </BracketColumn>
         </div>
       </div>
@@ -300,10 +303,21 @@ export function Playoffs({ state }: Props) {
         }}>
           Lower Bracket
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <BracketColumn label="Round 1">{card('LR1')}</BracketColumn>
-          <BracketColumn label="Semifinal">{card('LSF')}</BracketColumn>
-          <BracketColumn label="Final">{card('LF')}</BracketColumn>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
+          <BracketColumn label="Round 1">
+            {card('LR1A')}
+            {card('LR1B')}
+          </BracketColumn>
+          <BracketColumn label="Round 2">
+            <CenteredMatch minHeight={CARD_H}>{card('LR2A')}</CenteredMatch>
+            <CenteredMatch minHeight={CARD_H}>{card('LR2B')}</CenteredMatch>
+          </BracketColumn>
+          <BracketColumn label="Semifinal">
+            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('LR3')}</CenteredMatch>
+          </BracketColumn>
+          <BracketColumn label="Final">
+            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('LF')}</CenteredMatch>
+          </BracketColumn>
         </div>
       </div>
 

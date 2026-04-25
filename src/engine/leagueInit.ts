@@ -319,24 +319,31 @@ export function buildPlayoffBracket(
   season: number,
   seededTeams: string[]
 ): PlayoffBracket {
-  // seededTeams[0] = s1, ..., seededTeams[5] = s6
-  const [s1, s2, s3, s4, s5, s6] = seededTeams;
+  // s1=A1, s2=B1, s3=A2, s4=B2, s5=A3, s6=B3, s7=A4, s8=B4
+  const [s1, s2, s3, s4, s5, s6, s7, s8] = seededTeams;
+  const p = (r: string) => `p${r}_${leagueId}_${season}`;
 
   const matches: PlayoffMatch[] = [
-    // Upper Quarterfinals
-    { id: `pUQF1_${leagueId}_${season}`, round: 'UQF1', teamAId: s3, teamBId: s6, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: `pUSF1_${leagueId}_${season}`, feedsLoserTo: `pLR1_${leagueId}_${season}` },
-    { id: `pUQF2_${leagueId}_${season}`, round: 'UQF2', teamAId: s4, teamBId: s5, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: `pUSF2_${leagueId}_${season}`, feedsLoserTo: `pLR1_${leagueId}_${season}` },
+    // Upper Round 1 (s1 and s2 get byes)
+    { id: p('UR1A'), round: 'UR1A', teamAId: s4, teamBId: s5, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: p('USF1'), feedsLoserTo: p('LR1A') },
+    { id: p('UR1B'), round: 'UR1B', teamAId: s3, teamBId: s6, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: p('USF2'), feedsLoserTo: p('LR1B') },
     // Upper Semifinals
-    { id: `pUSF1_${leagueId}_${season}`, round: 'USF1', teamAId: s1, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: `pUF_${leagueId}_${season}`, feedsLoserTo: `pLSF_${leagueId}_${season}` },
-    { id: `pUSF2_${leagueId}_${season}`, round: 'USF2', teamAId: s2, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: `pUF_${leagueId}_${season}`, feedsLoserTo: `pLF_${leagueId}_${season}` },
+    { id: p('USF1'), round: 'USF1', teamAId: s1, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: p('UF'), feedsLoserTo: p('LR2A') },
+    { id: p('USF2'), round: 'USF2', teamAId: s2, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: p('UF'), feedsLoserTo: p('LR2B') },
     // Upper Final
-    { id: `pUF_${leagueId}_${season}`, round: 'UF', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: `pGF_${leagueId}_${season}`, feedsLoserTo: null },
-    // Lower bracket
-    { id: `pLR1_${leagueId}_${season}`, round: 'LR1', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: `pLSF_${leagueId}_${season}`, feedsLoserTo: null },
-    { id: `pLSF_${leagueId}_${season}`, round: 'LSF', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: `pLF_${leagueId}_${season}`, feedsLoserTo: null },
-    { id: `pLF_${leagueId}_${season}`, round: 'LF', teamAId: null, teamBId: null, format: 'bo5', result: null, bracket: 'lower', feedsWinnerTo: `pGF_${leagueId}_${season}`, feedsLoserTo: null },
+    { id: p('UF'), round: 'UF', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'upper', feedsWinnerTo: p('GF'), feedsLoserTo: p('LF') },
+    // Lower Round 1 (s7 and s8 pre-seeded as teamB)
+    { id: p('LR1A'), round: 'LR1A', teamAId: null, teamBId: s8, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: p('LR2A'), feedsLoserTo: null },
+    { id: p('LR1B'), round: 'LR1B', teamAId: null, teamBId: s7, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: p('LR2B'), feedsLoserTo: null },
+    // Lower Round 2
+    { id: p('LR2A'), round: 'LR2A', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: p('LR3'), feedsLoserTo: null },
+    { id: p('LR2B'), round: 'LR2B', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: p('LR3'), feedsLoserTo: null },
+    // Lower Semifinal
+    { id: p('LR3'), round: 'LR3', teamAId: null, teamBId: null, format: 'bo3', result: null, bracket: 'lower', feedsWinnerTo: p('LF'), feedsLoserTo: null },
+    // Lower Final
+    { id: p('LF'), round: 'LF', teamAId: null, teamBId: null, format: 'bo5', result: null, bracket: 'lower', feedsWinnerTo: p('GF'), feedsLoserTo: null },
     // Grand Final
-    { id: `pGF_${leagueId}_${season}`, round: 'GF', teamAId: null, teamBId: null, format: 'bo5', result: null, bracket: 'grand_final', feedsWinnerTo: null, feedsLoserTo: null },
+    { id: p('GF'), round: 'GF', teamAId: null, teamBId: null, format: 'bo5', result: null, bracket: 'grand_final', feedsWinnerTo: null, feedsLoserTo: null },
   ];
 
   return { matches, champion: null };

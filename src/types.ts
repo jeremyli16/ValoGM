@@ -317,7 +317,7 @@ export const EQUIP_MOD: Record<BuyType, number> = {
 export const LEAGUE_FORMATS: Record<LeagueTier, LeagueFormat> = {
   partnership: {
     teamsPerLeague: 12,
-    playoffTeams: 6,
+    playoffTeams: 8,
     playoffBye: 2,
     regularSeasonWeeks: 8,
     regularSeason: 'bo3',

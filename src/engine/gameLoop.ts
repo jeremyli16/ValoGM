@@ -183,11 +183,12 @@ function checkPhaseTransition(state: GameState): GameState {
     const groupA = sortStandings(sorted.filter(r => groupAIds.includes(r.teamId)));
     const groupB = sortStandings(sorted.filter(r => groupBIds.includes(r.teamId)));
 
-    // Top 3 from each group
+    // Top 4 from each group
     const seeds = [
       groupA[0]?.teamId, groupB[0]?.teamId,
       groupA[1]?.teamId, groupB[1]?.teamId,
       groupA[2]?.teamId, groupB[2]?.teamId,
+      groupA[3]?.teamId, groupB[3]?.teamId,
     ].filter(Boolean) as string[];
 
     const bracket = buildPlayoffBracket(state.leagueId, state.season, seeds);
@@ -272,7 +273,7 @@ function simPlayoffStage(state: GameState): GameState {
   const rng = createRng(state.seed + state.season * 1000 + state.week + 10000);
 
   const bracket = state.playoffBracket;
-  const ORDER = ['UQF1', 'UQF2', 'LR1', 'USF1', 'USF2', 'LSF', 'LF', 'UF', 'GF'];
+  const ORDER = ['UR1A', 'UR1B', 'LR1A', 'LR1B', 'USF1', 'USF2', 'LR2A', 'LR2B', 'UF', 'LR3', 'LF', 'GF'];
 
   for (const round of ORDER) {
     const match = bracket.matches.find(m => m.round === round && !m.result);
