@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import type { GameState, RegionId } from './types';
+import type { GameState, RegionId, Player } from './types';
+import { HOME_NATIONALITIES } from './types';
 import { createNewGame, advanceWeek } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
@@ -18,6 +19,7 @@ export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [nav, setNav] = useState<NavItem>('dashboard');
   const [loading, setLoading] = useState(false);
+  const [importViolators, setImportViolators] = useState<Player[]>([]);
 
   const handleStart = useCallback(async (regionId: RegionId, teamIndex: number, seed: number) => {
     setLoading(true);
@@ -52,6 +54,21 @@ export function App() {
 
   const handleAdvanceWeek = useCallback(async () => {
     if (!gameState) return;
+
+    if (gameState.phase !== 'preseason' && gameState.phase !== 'new_game') {
+      const team = gameState.teams.get(gameState.playerTeamId);
+      if (team) {
+        const homeNats = HOME_NATIONALITIES[team.region];
+        const imports = team.rosterIds
+          .map(id => gameState.players.get(id))
+          .filter((p): p is Player => !!p && !homeNats.includes(p.nationality));
+        if (imports.length > 1) {
+          setImportViolators(imports);
+          return;
+        }
+      }
+    }
+
     setLoading(true);
     try {
       await new Promise(r => setTimeout(r, 20));
@@ -78,14 +95,70 @@ export function App() {
   }
 
   return (
-    <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
-      {nav === 'dashboard'  && <Dashboard  state={gameState} />}
-      {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} />}
-      {nav === 'transfers'  && <TransferMarket state={gameState} />}
-      {nav === 'matchday'   && <MatchDay   state={gameState} />}
-      {nav === 'standings'  && <Standings  state={gameState} />}
-      {nav === 'schedule'   && <Schedule   state={gameState} />}
-      {nav === 'playoffs'   && <Playoffs   state={gameState} />}
-    </Layout>
+    <>
+      <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
+        {nav === 'dashboard'  && <Dashboard  state={gameState} />}
+        {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} />}
+        {nav === 'transfers'  && <TransferMarket state={gameState} />}
+        {nav === 'matchday'   && <MatchDay   state={gameState} />}
+        {nav === 'standings'  && <Standings  state={gameState} />}
+        {nav === 'schedule'   && <Schedule   state={gameState} />}
+        {nav === 'playoffs'   && <Playoffs   state={gameState} />}
+      </Layout>
+
+      {importViolators.length > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: 'var(--bg-1)',
+            border: '1px solid var(--red)',
+            clipPath: 'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%)',
+            padding: 24,
+            maxWidth: 420,
+            width: '90%',
+          }}>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: 18, color: 'var(--red)', letterSpacing: '0.08em', marginBottom: 8 }}>
+              IMPORT LIMIT EXCEEDED
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+              Only <strong style={{ color: 'var(--text-primary)' }}>1 import player</strong> is allowed in the starting lineup.
+              Remove the following players from the starting five before advancing:
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              {importViolators.map(p => (
+                <div key={p.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '6px 10px', marginBottom: 6,
+                  background: 'var(--bg-2)', border: '1px solid var(--border)',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-head)', fontWeight: 700, fontSize: 14 }}>{p.alias.toUpperCase()}</span>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{p.nationality}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="btn btn-red"
+                style={{ flex: 1 }}
+                onClick={() => { setImportViolators([]); setNav('roster'); }}
+              >
+                Go to Roster
+              </button>
+              <button
+                className="btn"
+                style={{ flex: 1 }}
+                onClick={() => setImportViolators([])}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

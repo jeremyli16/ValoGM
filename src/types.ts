@@ -348,10 +348,10 @@ export const HOME_NATIONALITIES: Record<RegionId, string[]> = {
 };
 
 export const IMPORT_LIMITS: Record<RegionId, { maxImports: number }> = {
-  americas: { maxImports: 2 },
-  emea:     { maxImports: 2 },
-  pacific:  { maxImports: 2 },
-  china:    { maxImports: 2 },
+  americas: { maxImports: 1 },
+  emea:     { maxImports: 1 },
+  pacific:  { maxImports: 1 },
+  china:    { maxImports: 1 },
 };
 
 export const ROLE_AGENTS: Record<PlayerRole, string[]> = {
