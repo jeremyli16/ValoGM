@@ -61,35 +61,45 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '8px 0' }}>
-          {NAV_ITEMS.map(item => (
-            <div
-              key={item.id}
-              onClick={() => onNav(item.id)}
-              style={{
-                padding: '9px 14px',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-head)',
-                fontSize: 13,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: active === item.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                background: active === item.id ? 'var(--bg-3)' : 'transparent',
-                borderLeft: active === item.id ? '3px solid var(--red)' : '3px solid transparent',
-                transition: 'all 0.1s',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}
-            >
-              {item.label}
-              {item.id === 'dashboard' && unread > 0 && (
-                <span style={{
-                  background: 'var(--red)', color: '#fff',
-                  fontFamily: 'var(--font-mono)', fontSize: 10,
-                  padding: '1px 5px', borderRadius: 10,
-                }}>{unread}</span>
-              )}
-            </div>
-          ))}
+          {NAV_ITEMS.map(item => {
+            const isActive = active === item.id;
+            return (
+              <div
+                key={item.id}
+                className={`nav-item${isActive ? ' nav-active' : ''}`}
+                onClick={() => onNav(item.id)}
+                style={{
+                  position: 'relative',
+                  padding: '9px 14px 9px 17px',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-head)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}
+              >
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    left: 0, top: 0, bottom: 0,
+                    width: 3,
+                    background: 'var(--red)',
+                  }} />
+                )}
+                {item.label}
+                {item.id === 'dashboard' && unread > 0 && (
+                  <span style={{
+                    background: 'var(--red)', color: '#fff',
+                    fontFamily: 'var(--font-mono)', fontSize: 10,
+                    padding: '1px 5px', borderRadius: 10,
+                  }}>{unread}</span>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Footer */}

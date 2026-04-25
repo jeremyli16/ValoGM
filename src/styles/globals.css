@@ -167,6 +167,10 @@ h1, h2, h3, h4 {
 /* Scrollable area */
 .scroll-area { overflow-y: auto; }
 
+/* Sidebar nav items */
+.nav-item { background: var(--bg-1); }
+.nav-item.nav-active { background: var(--bg-3); }
+
 /* Layout helpers */
 .flex { display: flex; }
 .flex-col { display: flex; flex-direction: column; }
