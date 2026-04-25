@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs';
 
 interface Props {
   state: GameState;
   active: NavItem;
   onNav: (item: NavItem) => void;
+  onAdvanceWeek: () => void;
   children: ReactNode;
 }
 
@@ -16,18 +17,20 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
   { id: 'transfers',  label: 'Market' },
   { id: 'matchday',   label: 'Matches' },
   { id: 'standings',  label: 'Standings' },
+  { id: 'schedule',   label: 'Schedule' },
+  { id: 'playoffs',   label: 'Playoffs' },
 ];
 
 function phaseTag(state: GameState) {
   const p = state.phase;
-  if (p === 'regular_season') return `S${state.season} A${state.act} W${state.week}`;
-  if (p === 'playoffs') return `S${state.season} PO`;
-  if (p === 'offseason') return `Offseason`;
-  if (p === 'preseason') return `Preseason`;
+  if (p === 'regular_season') return `Season ${state.season} — Act ${state.act} — Week ${state.week}`;
+  if (p === 'playoffs') return `Season ${state.season} — Playoffs`;
+  if (p === 'offseason') return `Offseason — Week ${state.week}`;
+  if (p === 'preseason') return 'Preseason';
   return '';
 }
 
-export function Layout({ state, active, onNav, children }: Props) {
+export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props) {
   const unread = state.notifications.filter(n => !n.read).length;
   const team = state.teams.get(state.playerTeamId);
 
@@ -99,7 +102,30 @@ export function Layout({ state, active, onNav, children }: Props) {
 
       {/* Main content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {children}
+        {/* Top bar */}
+        <div style={{
+          height: 44, flexShrink: 0,
+          background: 'var(--bg-1)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <span className="font-head text-red" style={{ fontSize: 14, letterSpacing: '0.06em' }}>
+              {state.teams.get(state.playerTeamId)?.name ?? ''}
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
+              {phaseTag(state)}
+            </span>
+          </div>
+          <button className="btn btn-teal" style={{ fontSize: 12, padding: '5px 16px' }} onClick={onAdvanceWeek}>
+            Advance Week ▶
+          </button>
+        </div>
+        {/* Page content */}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          {children}
+        </div>
       </div>
     </div>
   );

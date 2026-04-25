@@ -221,39 +221,28 @@ function simRound(
 function simOvertimeRounds(
   teamAPlayers: PlayerState[],
   teamBPlayers: PlayerState[],
-  attackSide: 'A' | 'B',
+  lastAttackSide: 'A' | 'B',
   rng: SeededRng
 ): { otA: number; otB: number } {
-  // OT: 5000cr each, 2 rounds (1 atk, 1 def each)
+  // Sides switch at OT start: whoever attacked last in regulation now defends.
+  // Sides then alternate every round. Play until one team leads by 2.
+  let otAttackSide: 'A' | 'B' = lastAttackSide === 'A' ? 'B' : 'A';
   let otA = 0, otB = 0;
-  const otEcon: PlayerEconomy[] = [0, 1, 2, 3, 4].map(i => ({ playerId: `ot${i}`, credits: 5000 }));
 
-  // Round 1
-  const r1Atk = attackSide === 'A' ? teamAPlayers : teamBPlayers;
-  const r1Def = attackSide === 'A' ? teamBPlayers : teamAPlayers;
-  const r1 = simRound(r1Atk, r1Def, otEcon, otEcon, 0, 0, 99, null, null, rng);
-  if (r1.winner === 'attack') {
-    if (attackSide === 'A') otA++; else otB++;
-  } else {
-    if (attackSide === 'A') otB++; else otA++;
+  for (let i = 0; i < 40; i++) {
+    const freshEcon: PlayerEconomy[] = [0,1,2,3,4].map(j => ({ playerId: `ot${j}`, credits: 5000 }));
+    const atk = otAttackSide === 'A' ? teamAPlayers : teamBPlayers;
+    const def = otAttackSide === 'A' ? teamBPlayers : teamAPlayers;
+    const r = simRound(atk, def, freshEcon, freshEcon, 0, 0, 99, null, null, rng);
+    const aWon = (otAttackSide === 'A') === (r.winner === 'attack');
+    if (aWon) otA++; else otB++;
+    if (Math.abs(otA - otB) >= 2) break;
+    otAttackSide = otAttackSide === 'A' ? 'B' : 'A';
   }
 
-  if (otA !== otB) return { otA, otB };
-
-  // Round 2 (sides swap)
-  const r2Side: 'A' | 'B' = attackSide === 'A' ? 'B' : 'A';
-  const r2Atk = r2Side === 'A' ? teamAPlayers : teamBPlayers;
-  const r2Def = r2Side === 'A' ? teamBPlayers : teamAPlayers;
-  const r2 = simRound(r2Atk, r2Def, otEcon, otEcon, 0, 0, 99, null, null, rng);
-  if (r2.winner === 'attack') {
-    if (r2Side === 'A') otA++; else otB++;
-  } else {
-    if (r2Side === 'A') otB++; else otA++;
-  }
-
-  // If still tied, flip a coin
-  if (otA === otB) {
-    if (rng() < 0.5) otA++; else otB++;
+  // Pathological fallback (probability ~(0.5)^20 ≈ negligible)
+  if (Math.abs(otA - otB) < 2) {
+    if (rng() < 0.5) otA += 2; else otB += 2;
   }
 
   return { otA, otB };

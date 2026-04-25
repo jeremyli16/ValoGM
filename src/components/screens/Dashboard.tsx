@@ -3,15 +3,6 @@ import { sortStandings } from '../../engine/leagueInit';
 
 interface Props {
   state: GameState;
-  onAdvanceWeek: () => void;
-}
-
-function phaseLabel(s: GameState) {
-  if (s.phase === 'preseason') return 'Preseason';
-  if (s.phase === 'regular_season') return `Season ${s.season} — Act ${s.act} — Week ${s.week}`;
-  if (s.phase === 'playoffs') return `Season ${s.season} — Playoffs`;
-  if (s.phase === 'offseason') return `Offseason — Week ${s.week}`;
-  return '';
 }
 
 function getNextMatch(state: GameState): ScheduledMatch | null {
@@ -67,7 +58,7 @@ function NotifItem({ notif }: { notif: Notification }) {
   );
 }
 
-export function Dashboard({ state, onAdvanceWeek }: Props) {
+export function Dashboard({ state }: Props) {
   const team = state.teams.get(state.playerTeamId);
   const org = team ? [...state.orgs.values()].find(o => o.teamId === state.playerTeamId) : null;
   const nextMatch = getNextMatch(state);
@@ -78,17 +69,6 @@ export function Dashboard({ state, onAdvanceWeek }: Props) {
 
   return (
     <div className="flex-col" style={{ height: '100%', padding: 16, gap: 16, overflow: 'auto' }}>
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="font-head text-red" style={{ fontSize: 22 }}>{team?.name ?? 'Your Team'}</h1>
-          <div className="text-dim text-sm">{phaseLabel(state)}</div>
-        </div>
-        <button className="btn btn-teal" style={{ fontSize: 13, padding: '8px 20px' }} onClick={onAdvanceWeek}>
-          Advance Week ▶
-        </button>
-      </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
         {/* Standing card */}
         <div className="card p-3">

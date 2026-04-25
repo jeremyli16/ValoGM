@@ -8,9 +8,11 @@ import { Roster } from './components/screens/Roster';
 import { TransferMarket } from './components/screens/TransferMarket';
 import { MatchDay } from './components/screens/MatchDay';
 import { Standings } from './components/screens/Standings';
+import { Schedule } from './components/screens/Schedule';
+import { Playoffs } from './components/screens/Playoffs';
 import { Layout } from './components/Layout';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs';
 
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -59,12 +61,14 @@ export function App() {
   }
 
   return (
-    <Layout state={gameState} active={nav} onNav={setNav}>
-      {nav === 'dashboard'  && <Dashboard  state={gameState} onAdvanceWeek={handleAdvanceWeek} />}
+    <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
+      {nav === 'dashboard'  && <Dashboard  state={gameState} />}
       {nav === 'roster'     && <Roster     state={gameState} />}
       {nav === 'transfers'  && <TransferMarket state={gameState} />}
       {nav === 'matchday'   && <MatchDay   state={gameState} />}
       {nav === 'standings'  && <Standings  state={gameState} />}
+      {nav === 'schedule'   && <Schedule   state={gameState} />}
+      {nav === 'playoffs'   && <Playoffs   state={gameState} />}
     </Layout>
   );
 }
