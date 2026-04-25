@@ -71,10 +71,6 @@ function PlayerDetail({ player, roleRatings }: { player: Player; roleRatings: Pl
           <span className="text-dim">Salary:</span>{' '}
           <span className="font-mono">${player.salary.toLocaleString()}/yr</span>
         </div>
-        <div>
-          <span className="text-dim">Peak age:</span>{' '}
-          <span className="font-mono">{player.peakAge}</span>
-        </div>
       </div>
 
       <div>
