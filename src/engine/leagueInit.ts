@@ -379,7 +379,7 @@ export function initLeague(regionId: RegionId, seed: number, rng: SeededRng): Le
   const challengersId = `league_${regionId}_challengers`;
 
   // Generate player pool: 90 contracted + 40 free agents = 130
-  const allGenerated = generatePlayerPool(130, rng);
+  const allGenerated = generatePlayerPool(130, rng, 0, regionId);
   const allPlayers = allGenerated.map(g => g.player);
   const allRoleRatings = allGenerated.flatMap(g => g.roleRatings);
 

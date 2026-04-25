@@ -5,6 +5,7 @@ import type {
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
   PLAYER_WIN_DELTA, PLAYER_LOSS_DELTA,
+  HOME_NATIONALITIES, IMPORT_LIMITS,
 } from '../types';
 import { createRng } from './rng';
 import { developPlayer, applyAgingEffects, updateRoleRatings } from './playerGen';
@@ -346,8 +347,18 @@ export function autoFillRoster(state: GameState): GameState {
   const team = state.teams.get(state.playerTeamId);
   if (!team || team.rosterIds.length >= 5) return state;
 
+  const homeNats = HOME_NATIONALITIES[team.region];
+  const maxImports = IMPORT_LIMITS[team.region].maxImports;
   const starterSet = new Set(team.rosterIds);
   const newRoster = [...team.rosterIds];
+
+  // Track current import count in the roster being built
+  let importCount = newRoster
+    .map(id => state.players.get(id))
+    .filter((p): p is Player => !!p && !homeNats.includes(p.nationality))
+    .length;
+
+  const canAdd = (p: Player) => homeNats.includes(p.nationality) || importCount < maxImports;
 
   // Bench candidates not already starting, sorted best-first
   let benchPool = team.subIds
@@ -368,6 +379,7 @@ export function autoFillRoster(state: GameState): GameState {
 
   function promote(p: Player, isBench: boolean) {
     if (newRoster.includes(p.id)) return;
+    if (!homeNats.includes(p.nationality)) importCount++;
     newRoster.push(p.id);
     if (isBench) {
       benchPool = benchPool.filter(x => x.id !== p.id);
@@ -399,21 +411,21 @@ export function autoFillRoster(state: GameState): GameState {
     }
   }
 
-  // Pass 1: fill each missing role (bench first, then FA)
+  // Pass 1: fill each missing role (bench first, then FA), respecting import limit
   for (const role of ROLES) {
     if (newRoster.length >= 5) break;
     const currentRoles = new Set(newRoster.map(id => state.players.get(id)?.primaryRole));
     if (currentRoles.has(role)) continue;
-    const fromBench = benchPool.find(p => p.primaryRole === role);
+    const fromBench = benchPool.find(p => p.primaryRole === role && canAdd(p));
     if (fromBench) { promote(fromBench, true); continue; }
-    const fromFA = faPool.find(p => p.primaryRole === role);
+    const fromFA = faPool.find(p => p.primaryRole === role && canAdd(p));
     if (fromFA) promote(fromFA, false);
   }
 
-  // Pass 2: fill remaining slots by skill (bench preferred over FA)
+  // Pass 2: fill remaining slots by skill (bench preferred over FA), respecting import limit
   while (newRoster.length < 5) {
-    const b = benchPool[0];
-    const f = faPool[0];
+    const b = benchPool.find(p => canAdd(p));
+    const f = faPool.find(p => canAdd(p));
     if (!b && !f) break;
     if (b && (!f || skillScore(b) >= skillScore(f))) promote(b, true);
     else if (f) promote(f, false);

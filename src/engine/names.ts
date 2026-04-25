@@ -133,6 +133,17 @@ export function generateNationality(rng: SeededRng): NationalityPool {
   );
 }
 
+export function generateNationalityForRegion(rng: SeededRng, regionId: RegionId): NationalityPool {
+  // 85% home-region player, 15% import
+  if (rng() < 0.85) {
+    const homePools = NATIONALITY_POOLS.filter(p => p.region === regionId);
+    if (homePools.length > 0) {
+      return weightedChoice(rng, homePools, homePools.map(p => p.weight));
+    }
+  }
+  return generateNationality(rng);
+}
+
 export function generateName(pool: NationalityPool, rng: SeededRng): { firstName: string; lastName: string } {
   return {
     firstName: randChoice(rng, pool.firstNames),

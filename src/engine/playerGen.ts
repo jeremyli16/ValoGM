@@ -1,5 +1,5 @@
 import type {
-  Player, PlayerRoleRatingRecord, PlayerRole, PlayerArchetype,
+  Player, PlayerRoleRatingRecord, PlayerRole, PlayerArchetype, RegionId,
 } from '../types';
 import {
   AGE_RANGES, QUALITY_RANGES, SALARY_RANGES, OFF_ROLE_BASE,
@@ -7,7 +7,7 @@ import {
 } from '../types';
 import type { SeededRng } from './rng';
 import { randInt, randFloat, randChoice, weightedChoice, clamp } from './rng';
-import { generateNationality, generateName, generateAlias } from './names';
+import { generateNationality, generateNationalityForRegion, generateName, generateAlias } from './names';
 
 const ROLES: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
 
@@ -140,9 +140,10 @@ export function generatePlayer(
   id: string,
   primaryRole: PlayerRole,
   archetype: PlayerArchetype,
-  rng: SeededRng
+  rng: SeededRng,
+  regionId?: RegionId
 ): GeneratedPlayer {
-  const pool = generateNationality(rng);
+  const pool = regionId ? generateNationalityForRegion(rng, regionId) : generateNationality(rng);
   const { firstName, lastName } = generateName(pool, rng);
   const alias = generateAlias(firstName, pool.nationality, rng);
 
@@ -184,7 +185,8 @@ export function generatePlayer(
 export function generatePlayerPool(
   totalPlayers: number,
   rng: SeededRng,
-  startIndex = 0
+  startIndex = 0,
+  regionId?: RegionId
 ): GeneratedPlayer[] {
   const roleDistribution: PlayerRole[] = [];
   const countPerRole = Math.floor(totalPlayers / 4);
@@ -203,7 +205,7 @@ export function generatePlayerPool(
 
   return roleDistribution.map((role, i) => {
     const archetype = pickArchetype(rng);
-    return generatePlayer(`p${startIndex + i}`, role, archetype, rng);
+    return generatePlayer(`p${startIndex + i}`, role, archetype, rng, regionId);
   });
 }
 
