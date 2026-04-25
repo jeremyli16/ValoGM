@@ -143,9 +143,12 @@ function assignRoster(
   const roster: Player[] = [];
   let imports = 0;
 
+  const rostered = new Set<string>();
+
   for (const role of needed) {
     const eligible = players.filter(p =>
       !p.teamId &&
+      !rostered.has(p.id) &&
       p.primaryRole === role &&
       (isHomePlayer(p, team.region) || imports < maxImports)
     ).sort((a, b) => {
@@ -154,22 +157,28 @@ function assignRoster(
       return (scoreB - scoreA) + (rng() - 0.5) * 10;
     });
     if (eligible.length === 0) {
-      // Fallback: any free player
-      const any = players.filter(p => !p.teamId);
+      // Fallback: any free player that still respects import limit
+      const any = players.filter(p =>
+        !p.teamId &&
+        !rostered.has(p.id) &&
+        (isHomePlayer(p, team.region) || imports < maxImports)
+      );
       if (any.length > 0) {
         const p = any[0];
+        rostered.add(p.id);
         roster.push(p);
         if (!isHomePlayer(p, team.region)) imports++;
       }
     } else {
       const p = eligible[0];
+      rostered.add(p.id);
       if (!isHomePlayer(p, team.region)) imports++;
       roster.push(p);
     }
   }
 
   // Sub
-  const subEligible = players.filter(p => !p.teamId).slice(0, 1);
+  const subEligible = players.filter(p => !p.teamId && !rostered.has(p.id)).slice(0, 1);
   const subs = subEligible.slice(0, 1);
 
   [...roster, ...subs].forEach(p => {
