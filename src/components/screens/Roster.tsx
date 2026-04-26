@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GameState, Player, PlayerRoleRatingRecord, PlayerMatchStat } from '../../types';
+import type { GameState, Player, PlayerRoleRatingRecord, PlayerMatchStat, Coach } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
 
@@ -217,6 +217,51 @@ function PlayerRow({ player, selected, onClick }: { player: Player; selected: bo
   );
 }
 
+function CoachSection({ coaches }: { coaches: { coach: Coach; role: 'head' | 'assistant' }[] }) {
+  if (coaches.length === 0) return null;
+  return (
+    <div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+      <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 10, letterSpacing: '0.08em' }}>
+        Coaching Staff
+      </div>
+      {coaches.map(({ coach, role }) => (
+        <div key={coach.id} style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '10px 0',
+          borderBottom: '1px solid var(--border)',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>
+              {coach.firstName} {coach.lastName}
+              <span className="text-dim text-xs font-head" style={{ marginLeft: 8 }}>
+                {role === 'head' ? 'HEAD COACH' : 'ASSISTANT'}
+              </span>
+            </div>
+            <div className="text-dim" style={{ fontSize: 11, marginTop: 2 }}>
+              {coach.nationality} · Age {coach.age} · ${coach.salary.toLocaleString()}/yr
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2px 12px', minWidth: 180 }}>
+            {([
+              { label: 'TACTICS', value: coach.tactics, color: 'var(--blue)' },
+              { label: 'SCOUTING', value: coach.scouting, color: 'var(--teal)' },
+              { label: 'MORALE', value: coach.moraleBoost, color: 'var(--amber)' },
+            ] as const).map(({ label, value, color }) => (
+              <div key={label}>
+                <div className="text-dim" style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', marginBottom: 2 }}>{label}</div>
+                <div style={{ height: 4, background: 'var(--bg-2)', borderRadius: 2 }}>
+                  <div style={{ height: '100%', width: `${value}%`, background: color, borderRadius: 2 }} />
+                </div>
+                <div className="font-mono" style={{ fontSize: 10, marginTop: 1, color }}>{value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'starters' | 'subs'>('starters');
@@ -229,6 +274,16 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
     .map(id => state.players.get(id))
     .filter(Boolean) as Player[];
   const listed = tab === 'starters' ? starters : subs;
+
+  const coachEntries: { coach: Coach; role: 'head' | 'assistant' }[] = [];
+  if (team?.headCoachId) {
+    const c = state.coaches.get(team.headCoachId);
+    if (c) coachEntries.push({ coach: c, role: 'head' });
+  }
+  if (team?.assistantCoachId) {
+    const c = state.coaches.get(team.assistantCoachId);
+    if (c) coachEntries.push({ coach: c, role: 'assistant' });
+  }
 
   const selectedPlayer = selectedId ? state.players.get(selectedId) ?? null : null;
   const selectedRoleRatings = selectedPlayer
@@ -276,6 +331,7 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
               ))}
             </tbody>
           </table>
+          <CoachSection coaches={coachEntries} />
         </div>
       </div>
 
