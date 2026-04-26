@@ -24,10 +24,10 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **Dashboard**
 - Win/loss record, standings position, points
-- Budget and payroll summary
+- Budget and payroll summary (starters at full salary, bench players at 50%)
 - Next scheduled match preview
 - Active roster with morale indicators
-- Notification inbox (match results, contract alerts)
+- Notification inbox (match results, contract alerts, transfer responses)
 
 **Roster**
 - Tabbed view: Starters (5) vs. Substitutes
@@ -36,7 +36,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Import rule enforcement: max 1 non-home-region player in starting lineup; popup warning blocks week advancement if violated
 
 **Transfer Market**
-- **Players tab:** Browse free agents and contracted players, filterable by role and search; make offers with adjustable fee, salary, and contract length; visual acceptance likelihood indicator
+- **Players tab:** Browse free agents and contracted players, filterable by role and search; offer modal shows the required (non-negotiable) transfer fee computed from salary, years remaining, skill, and bench status; estimated acceptance likelihood indicator; live offers panel tracks all sent offers with their status (pending / accepted / rejected / counter)
 - **Coaches tab:** View your current head and assistant coaching staff with stat bars; browse and search free agent coaches sorted by overall rating; hire via a modal with head/assistant role selection (displacing the current occupant back to free agency); release coaches back to free agency
 
 **Schedule**
@@ -103,17 +103,23 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - 42 coaches generated at game start (region-biased nationality); all teams assigned a head coach, top 8 partnership teams also receive an assistant; remainder enter the free agent pool
 - Coach salaries scale with average rating; coaches are persisted to IndexedDB and tracked via dirty flag
 
+**Transfer System**
+- **Free agents** sign directly — no fee required; acceptance weighted heavily toward any reasonable salary offer
+- **Contracted players** require a non-negotiable buyout: `salary × yearsRemaining × skillMultiplier (0.75–1.5)`; bench players receive a 40% discount on their buyout (teams holding players on the bench are easier to buy out)
+- **Bench salary rule:** players in the substitute slot cost 50% of their contract salary in payroll; starters cost full salary — discourages hoarding
+- **AI acceptance model** (0–95% probability per advance): salary ratio vs. asking salary (0–70 pts); team win-rate delta between buying and current team (−10 to +20 pts); morale (unhappy players easier to poach, −15 to +15 pts); free agent bonus (+35); bench bonus (+10)
+- **Counter-offers:** when the salary is in the 0.8–1.3× band the AI has a 35% chance to counter with the exact salary that would flip them to accept
+- All offers are persisted immediately; responses arrive on the next week advance
+
 **Persistence**
-- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, and coaches
-- Dirty-flag system: only modified players, matches, and coaches are re-written each week
+- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, coaches, and transfer offers
+- Teams written on every persist cycle (ensures roster/morale/record changes survive a reload)
+- Dirty-flag system for players, matches, and coaches; transfer offers are fully upserted each cycle
 - Full save/load reconstructs all `Map<>` structures from stored arrays
 
 ---
 
 ## Not Yet Implemented
-
-### Transfer System
-The UI lets you compose offers (fee, salary, contract length) and calculates acceptance likelihood, but nothing is wired up on the backend. Offers are not persisted, no AI response (accept / reject / counter) is generated, and no decision notification is sent back to the player. The `pendingDecisions` list and `Decision` type exist in the data model but are never populated.
 
 ### Contract Renewals
 Expiring contracts generate notifications, but there is no UI to negotiate renewals, reject them, or let a player walk to free agency at season end. The `Decision` flow intended for this has no renderer.
