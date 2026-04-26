@@ -30,8 +30,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Notification inbox (match results, contract alerts, transfer responses)
 
 **Roster**
-- Tabbed view: Starters (5) vs. Substitutes
-- Player detail panel: base stats (Aim, Game Sense, Clutch, Communication, Adaptability, Morale), role ratings with scout confidence, season averages (K/D/A, ADR, Rating), salary, main agent
+- Tabbed view: Starters (5) vs. Substitutes (0 or more — teams are not required to carry bench players)
+- Player detail panel: base stats (Aim, Game Sense, Clutch, Communication, Adaptability, Morale), role ratings with scout confidence, season averages (K/D/A, ADR, Rating) fetched live from IndexedDB, salary, main agent
 - Move players between starting lineup and bench; auto-fill vacant starter slots from bench then free agents, role-prioritized then by skill
 - Import rule enforcement: max 1 non-home-region player in starting lineup; popup warning blocks week advancement if violated
 - Release player: two-step confirm in the detail panel; released players have their contract terminated, become free agents, and require no buyout fee when signing with a new team
@@ -72,6 +72,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Role side modifiers: Duelists strong on attack, Sentinels on defense, Controllers on defense, Initiators balanced
 - Team synergy bonus (+6%) when all 4 roles are present
 - Overtime: sides switch at 12–12, alternate each round, win by 2
+- **Realistic stat generation:** each round death produces exactly one kill credited to a skill-weighted opponent (aim 55%, game sense 30%, clutch 15%); survivors are selected by weighted probability rather than uniform random, so skilled players die less often; damage includes a chip-damage floor ensuring all players accumulate ADR even without kills — produces realistic K/D ratios (0.7–2.0 range) matching pro play
+- Per-match stats (K/D/A, ADR, rating) written to IndexedDB after each simulated match and fetched per season for display
 - **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
 **Player Generation**
@@ -88,7 +90,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **League Initialization**
 - 12 partnership teams + 8 challengers teams per region
-- Prestige-ordered roster draft from a shared player pool
+- Prestige-ordered roster draft from a shared player pool; bench roster is optional (teams may start with zero substitutes)
 - Import rules enforced at draft (max 1 non-home-region starter per team)
 - Round-robin schedule generation split into two groups (Group A / Group B)
 - Snake-draft group seeding
@@ -113,7 +115,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - All offers are persisted immediately; responses arrive on the next week advance
 
 **Persistence**
-- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, coaches, and transfer offers
+- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, coaches, transfer offers, and player match stats
+- `playerMatchStats` records keyed `{matchId}_{playerId}` store per-player K/D/A, ADR, and rating with a `season` field; written alongside match results in the dirty-match flush
 - Teams written on every persist cycle (ensures roster/morale/record changes survive a reload)
 - Dirty-flag system for players, matches, and coaches; transfer offers are fully upserted each cycle
 - Full save/load reconstructs all `Map<>` structures from stored arrays
@@ -141,7 +144,7 @@ The `Player` type has no injury or availability field. All players are always av
 The `offseason` phase exists in `GamePhase` but the game never enters it cleanly — after playoffs the state machine resets directly into the next season. There is no offseason logic: no free agency period, no contract expirations being resolved, no salary cap enforcement, no draft, and no end-of-season player development pass.
 
 ### Multi-Season Persistence
-The current save/load model works within a season. Historical match results and standings from prior seasons are not archived to IndexedDB, so there is no all-time stats view, no career records, and no reference to previous season performance in player development.
+Per-season player stats are written to IndexedDB and survive reloads within the current season. Historical match results and standings from prior seasons are not yet archived — at season transition, old stats remain in the store but there is no UI to view career records, cross-season leaderboards, or prior-season standings.
 
 ### Challengers League
 Eight challengers teams are generated and assigned rosters at game start. They do not have a schedule, standings, or playoff bracket. There is no promotion/relegation mechanic between Challengers and Partnership tiers.
