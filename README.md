@@ -34,6 +34,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Player detail panel: base stats (Aim, Game Sense, Clutch, Communication, Adaptability, Morale), role ratings with scout confidence, season averages (K/D/A, ADR, Rating), salary, main agent
 - Move players between starting lineup and bench; auto-fill vacant starter slots from bench then free agents, role-prioritized then by skill
 - Import rule enforcement: max 1 non-home-region player in starting lineup; popup warning blocks week advancement if violated
+- Release player: two-step confirm in the detail panel; released players have their contract terminated, become free agents, and require no buyout fee when signing with a new team
 
 **Transfer Market**
 - **Players tab:** Browse free agents and contracted players, filterable by role and search; offer modal shows the required (non-negotiable) transfer fee computed from salary, years remaining, skill, and bench status; estimated acceptance likelihood indicator; live offers panel tracks all sent offers with their status (pending / accepted / rejected / counter)
