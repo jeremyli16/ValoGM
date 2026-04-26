@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GameState, Player, PlayerRoleRatingRecord } from '../../types';
+import type { GameState, Player, PlayerRoleRatingRecord, PlayerMatchStat } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
 
@@ -15,9 +15,39 @@ const ROLE_COLORS: Record<string, string> = {
   sentinel:   'var(--role-sentinel)',
 };
 
-function PlayerDetail({ player, roleRatings, isStarter, canPromote, onMove }: {
+interface SeasonAvg {
+  games: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  adr: number;
+  rating: number;
+}
+
+function computeSeasonAvg(playerId: string, state: GameState): SeasonAvg | null {
+  const entries: PlayerMatchStat[] = [];
+  state.matches.forEach(m => {
+    if (m.result && m.season === state.season) {
+      const stat = m.result.playerStats.find(s => s.playerId === playerId);
+      if (stat) entries.push(stat);
+    }
+  });
+  if (entries.length === 0) return null;
+  const n = entries.length;
+  return {
+    games: n,
+    kills:   Math.round(entries.reduce((s, e) => s + e.kills,   0) / n * 10) / 10,
+    deaths:  Math.round(entries.reduce((s, e) => s + e.deaths,  0) / n * 10) / 10,
+    assists: Math.round(entries.reduce((s, e) => s + e.assists, 0) / n * 10) / 10,
+    adr:     Math.round(entries.reduce((s, e) => s + e.adr,     0) / n),
+    rating:  Math.round(entries.reduce((s, e) => s + e.rating,  0) / n * 100) / 100,
+  };
+}
+
+function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, onMove }: {
   player: Player;
   roleRatings: PlayerRoleRatingRecord[];
+  seasonAvg: SeasonAvg | null;
   isStarter: boolean;
   canPromote: boolean;
   onMove: (playerId: string, to: 'starter' | 'bench') => void;
@@ -86,6 +116,40 @@ function PlayerDetail({ player, roleRatings, isStarter, canPromote, onMove }: {
         <span className="text-dim text-xs">Main agent: </span>
         <span className="text-xs font-head uppercase" style={{ color: ROLE_COLORS[player.primaryRole] }}>{player.mainAgent}</span>
       </div>
+
+      {seasonAvg ? (
+        <div>
+          <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 8 }}>
+            Season Avg <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>({seasonAvg.games}g)</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px 0' }}>
+            {([
+              { label: 'K', value: seasonAvg.kills },
+              { label: 'D', value: seasonAvg.deaths },
+              { label: 'A', value: seasonAvg.assists },
+            ] as const).map(({ label, value }) => (
+              <div key={label} style={{ textAlign: 'center' }}>
+                <div className="text-dim" style={{ fontSize: 10, fontFamily: 'var(--font-head)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                <div className="font-mono" style={{ fontSize: 13 }}>{value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+            <div>
+              <span className="text-dim text-xs">ADR </span>
+              <span className="font-mono text-xs">{seasonAvg.adr}</span>
+            </div>
+            <div>
+              <span className="text-dim text-xs">Rating </span>
+              <span className="font-mono text-xs" style={{
+                color: seasonAvg.rating >= 1.2 ? 'var(--teal)' : seasonAvg.rating < 0.8 ? 'var(--red)' : 'var(--text-primary)',
+              }}>{seasonAvg.rating.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-dim text-xs">No matches played this season.</div>
+      )}
 
       <div style={{ paddingTop: 4 }}>
         {isStarter ? (
@@ -194,6 +258,7 @@ export function Roster({ state, onMovePlayer }: Props) {
           <PlayerDetail
             player={selectedPlayer}
             roleRatings={selectedRoleRatings}
+            seasonAvg={computeSeasonAvg(selectedPlayer.id, state)}
             isStarter={starterIds.has(selectedPlayer.id)}
             canPromote={starters.length < 5}
             onMove={onMovePlayer}

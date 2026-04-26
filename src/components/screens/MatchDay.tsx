@@ -109,21 +109,42 @@ function MatchDetail({ match, state }: { match: ScheduledMatch; state: GameState
         </div>
       ))}
 
-      {/* Player stats */}
-      <div>
-        <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 6 }}>Player Stats</div>
-        <table className="data-table">
-          <thead>
-            <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ADR</th><th>Rating</th></tr>
-          </thead>
-          <tbody>
-            {result.playerStats.map(stat => {
-              const p = state.players.get(stat.playerId);
-              return <PlayerStatRow key={stat.playerId} stat={stat} alias={p?.alias ?? stat.playerId} />;
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* Player stats — split by team */}
+      {[
+        { teamId: match.teamAId, label: teamA?.name ?? 'Team A' },
+        { teamId: match.teamBId, label: teamB?.name ?? 'Team B' },
+      ]
+        .sort((a) => (a.teamId === state.playerTeamId ? -1 : 1))
+        .map(({ teamId, label }) => {
+          const rosterIds = new Set(state.teams.get(teamId)?.rosterIds ?? []);
+          const teamStats = result.playerStats.filter(s => rosterIds.has(s.playerId));
+          if (teamStats.length === 0) return null;
+          const isPlayerTeam = teamId === state.playerTeamId;
+          return (
+            <div key={teamId}>
+              <div className="text-dim text-xs font-head uppercase" style={{
+                marginBottom: 6,
+                color: isPlayerTeam ? 'var(--text-secondary)' : 'var(--text-dim)',
+              }}>
+                {label}
+              </div>
+              <table className="data-table" style={{ marginBottom: 12 }}>
+                <thead>
+                  <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ADR</th><th>Rating</th></tr>
+                </thead>
+                <tbody>
+                  {teamStats
+                    .sort((a, b) => b.rating - a.rating)
+                    .map(stat => {
+                      const p = state.players.get(stat.playerId);
+                      return <PlayerStatRow key={stat.playerId} stat={stat} alias={p?.alias ?? stat.playerId} />;
+                    })}
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+
     </div>
   );
 }

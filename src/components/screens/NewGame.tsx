@@ -46,7 +46,7 @@ export function NewGame({ onStart }: Props) {
           <h1 className="font-head text-red" style={{ fontSize: 36, letterSpacing: '0.1em' }}>
             VALORANT GM
           </h1>
-          <p className="text-dim" style={{ marginTop: 4 }}>Build your roster. Win the title.</p>
+          <p className="text-dim" style={{ marginTop: 4 }}>Valorant GM Simulator inspired by ZenGM.</p>
         </div>
 
         <div className="card p-4" style={{ marginBottom: 16 }}>

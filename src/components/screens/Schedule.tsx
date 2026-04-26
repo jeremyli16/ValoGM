@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { GameState, ScheduledMatch, MapResult } from '../../types';
 
 interface Props { state: GameState; }
 
 export function Schedule({ state }: Props) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const teamMatches: ScheduledMatch[] = [];
   state.matches.forEach(m => {
     if (
@@ -43,6 +45,14 @@ export function Schedule({ state }: Props) {
           const won = result ? result.winner === (isA ? 'A' : 'B') : null;
           const isCurrent = !result && m.week === state.week;
 
+          const isExpanded = expandedId === m.id;
+          const playerRosterIds = new Set(state.teams.get(state.playerTeamId)?.rosterIds ?? []);
+          const myStats = result
+            ? result.playerStats
+                .filter(s => playerRosterIds.has(s.playerId))
+                .sort((a, b) => b.rating - a.rating)
+            : [];
+
           return (
             <div
               key={m.id}
@@ -50,7 +60,9 @@ export function Schedule({ state }: Props) {
               style={{
                 padding: '10px 14px',
                 borderColor: isCurrent ? 'var(--red-dim)' : undefined,
+                cursor: result ? 'pointer' : 'default',
               }}
+              onClick={() => result && setExpandedId(isExpanded ? null : m.id)}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -103,6 +115,9 @@ export function Schedule({ state }: Props) {
                         </span>
                       ))}
                     </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>
+                      {isExpanded ? '▲' : '▼'}
+                    </span>
                   </div>
                 ) : (
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' }}>
@@ -110,6 +125,37 @@ export function Schedule({ state }: Props) {
                   </span>
                 )}
               </div>
+
+              {isExpanded && myStats.length > 0 && (
+                <div style={{ marginTop: 10, borderTop: '1px solid var(--border-dim)', paddingTop: 10 }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ADR</th><th>Rating</th></tr>
+                    </thead>
+                    <tbody>
+                      {myStats.map(stat => {
+                        const p = state.players.get(stat.playerId);
+                        const kd = stat.deaths === 0 ? stat.kills : (stat.kills / stat.deaths).toFixed(2);
+                        return (
+                          <tr key={stat.playerId}>
+                            <td style={{ fontWeight: 600 }}>{p?.alias ?? stat.playerId}</td>
+                            <td className="font-mono">{stat.kills}</td>
+                            <td className="font-mono">{stat.deaths}</td>
+                            <td className="font-mono">{stat.assists}</td>
+                            <td className="font-mono">{kd}</td>
+                            <td className="font-mono">{stat.adr}</td>
+                            <td className="font-mono" style={{
+                              color: stat.rating >= 1.2 ? 'var(--teal)' : stat.rating < 0.8 ? 'var(--red)' : 'var(--text-primary)',
+                            }}>
+                              {stat.rating.toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           );
         })}
