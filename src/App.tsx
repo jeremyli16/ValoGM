@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { GameState, RegionId, Player, CoachRole } from './types';
 import { HOME_NATIONALITIES } from './types';
-import { createNewGame, advanceWeek } from './engine/gameLoop';
+import { createNewGame, advanceWeek, makeTransferOffer } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
@@ -50,6 +50,13 @@ export function App() {
     }
     gameState.teams.set(gameState.playerTeamId, newTeam);
     setGameState({ ...gameState });
+  }, [gameState]);
+
+  const handleMakeOffer = useCallback(async (playerId: string, salary: number, length: number, fee: number) => {
+    if (!gameState) return;
+    const next = makeTransferOffer(gameState, playerId, salary, length, fee);
+    setGameState({ ...next });
+    await persistGameState(next);
   }, [gameState]);
 
   const handleHireCoach = useCallback((coachId: string, role: CoachRole) => {
@@ -158,7 +165,7 @@ export function App() {
       <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
         {nav === 'dashboard'  && <Dashboard  state={gameState} />}
         {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} />}
-        {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} />}
+        {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} onMakeOffer={handleMakeOffer} />}
         {nav === 'matchday'   && <MatchDay   state={gameState} />}
         {nav === 'standings'  && <Standings  state={gameState} />}
         {nav === 'schedule'   && <Schedule   state={gameState} />}

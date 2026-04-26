@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react';
-import type { GameState, Player, PlayerRole, Coach, CoachRole } from '../../types';
+import type { GameState, Player, PlayerRole, Coach, CoachRole, TransferOffer } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
+import { computeBuyout } from '../../engine/gameLoop';
 
 interface Props {
   state: GameState;
   onHireCoach?: (coachId: string, role: CoachRole) => void;
   onFireCoach?: (role: CoachRole) => void;
+  onMakeOffer?: (playerId: string, salary: number, length: number, fee: number) => void;
 }
 
 type Tab = 'players' | 'coaches';
@@ -77,9 +79,15 @@ function OfferModal({ player, state, onClose, onSend }: {
   onClose: () => void;
   onSend: (salary: number, length: number, fee: number) => void;
 }) {
-  const [salary, setSalary] = useState(Math.round(player.salary * 1.1 / 10000) * 10000);
+  const [salary, setSalary] = useState(Math.round(player.salary * 1.1 / 5_000) * 5_000);
   const [length, setLength] = useState(2);
-  const [fee, setFee] = useState(player.teamId ? Math.round(player.salary * 2 / 10000) * 10000 : 0);
+
+  // Compute fixed buyout for contracted players
+  const sellingTeam = player.teamId ? state.teams.get(player.teamId) : null;
+  const contract = player.contractId ? state.contracts.get(player.contractId) : undefined;
+  const requiredFee = (sellingTeam && contract)
+    ? computeBuyout(player, contract, sellingTeam, state.season) : 0;
+  const isBenched = sellingTeam?.subIds.includes(player.id) ?? false;
 
   const org = [...state.orgs.values()].find(o => o.teamId === state.playerTeamId);
   const likelihood = acceptanceLikelihood(player, salary, org?.prestige ?? 50);
@@ -92,19 +100,30 @@ function OfferModal({ player, state, onClose, onSend }: {
     }}>
       <div className="card p-4 flex-col gap-3" style={{ width: 380 }}>
         <div className="flex justify-between items-center">
-          <h3 className="font-head" style={{ fontSize: 16 }}>Transfer Offer — {player.alias}</h3>
+          <h3 className="font-head" style={{ fontSize: 16 }}>
+            {player.teamId ? 'Transfer Offer' : 'Sign Free Agent'} — {player.alias}
+          </h3>
           <button className="btn" onClick={onClose}>✕</button>
         </div>
 
-        {player.teamId && (
-          <div>
-            <label className="text-dim text-xs font-head uppercase">Transfer Fee ($)</label>
-            <input
-              type="number"
-              value={fee}
-              onChange={e => setFee(Number(e.target.value))}
-              style={{ width: '100%', background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', padding: '6px 10px', marginTop: 4 }}
-            />
+        {player.teamId ? (
+          <div style={{ padding: '8px 10px', background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-dim text-xs font-head uppercase">Required Transfer Fee</span>
+              <span className="font-mono" style={{ color: 'var(--amber)' }}>${requiredFee.toLocaleString()}</span>
+            </div>
+            {isBenched && (
+              <div className="text-dim text-xs" style={{ marginTop: 3 }}>
+                Bench discount applied — player is not in starting lineup
+              </div>
+            )}
+            <div className="text-dim text-xs" style={{ marginTop: 3 }}>
+              Buyout is non-negotiable and paid automatically on acceptance.
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: '8px 10px', background: 'var(--bg-2)', border: '1px solid var(--border)' }} className="text-dim text-xs">
+            Free agent — no transfer fee required
           </div>
         )}
 
@@ -117,7 +136,10 @@ function OfferModal({ player, state, onClose, onSend }: {
             onChange={e => setSalary(Number(e.target.value))}
             style={{ width: '100%', background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', padding: '6px 10px', marginTop: 4 }}
           />
-          <div className="text-dim text-xs" style={{ marginTop: 3 }}>Current: ${player.salary.toLocaleString()}/yr</div>
+          <div className="text-dim text-xs" style={{ marginTop: 3 }}>
+            Current asking salary: ${player.salary.toLocaleString()}/yr
+            {player.teamId && isBenched && <span style={{ color: 'var(--amber)' }}> · bench player (costs you ×0.5 if benched)</span>}
+          </div>
         </div>
 
         <div>
@@ -132,11 +154,11 @@ function OfferModal({ player, state, onClose, onSend }: {
         </div>
 
         <div className="flex justify-between items-center" style={{ padding: '8px 0', borderTop: '1px solid var(--border)' }}>
-          <span className="text-dim text-xs font-head uppercase">Acceptance Likelihood</span>
+          <span className="text-dim text-xs font-head uppercase">Estimated Likelihood</span>
           <span className="font-mono bold" style={{ color: likelihoodColor, fontSize: 18 }}>{likelihood}%</span>
         </div>
 
-        <button className="btn btn-teal" onClick={() => onSend(salary, length, fee)}>
+        <button className="btn btn-teal" onClick={() => onSend(salary, length, requiredFee)}>
           Send Offer
         </button>
       </div>
@@ -243,7 +265,7 @@ function HireModal({ coach, state, onClose, onHire }: {
   );
 }
 
-export function TransferMarket({ state, onHireCoach, onFireCoach }: Props) {
+export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer }: Props) {
   const [tab, setTab] = useState<Tab>('players');
 
   // ── Players tab state ──
@@ -251,7 +273,6 @@ export function TransferMarket({ state, onHireCoach, onFireCoach }: Props) {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [search, setSearch] = useState('');
   const [offerTarget, setOfferTarget] = useState<Player | null>(null);
-  const [sentOffers, setSentOffers] = useState<string[]>([]);
 
   // ── Coaches tab state ──
   const [coachSearch, setCoachSearch] = useState('');
@@ -301,11 +322,23 @@ export function TransferMarket({ state, onHireCoach, onFireCoach }: Props) {
     return map;
   }, [state]);
 
-  const handleSendOffer = (_salary: number, _length: number, _fee: number) => {
-    if (offerTarget) {
-      setSentOffers(prev => [...prev, offerTarget.id]);
-      setOfferTarget(null);
+  const pendingOfferPlayerIds = useMemo(() =>
+    new Set(state.transferOffers.filter(o => o.fromTeamId === state.playerTeamId && o.status === 'pending').map(o => o.playerId)),
+    [state.transferOffers, state.playerTeamId],
+  );
+
+  const myOffers = useMemo(() =>
+    state.transferOffers
+      .filter(o => o.fromTeamId === state.playerTeamId)
+      .sort((a, b) => b.deadline - a.deadline),
+    [state.transferOffers, state.playerTeamId],
+  );
+
+  const handleSendOffer = (salary: number, length: number, fee: number) => {
+    if (offerTarget && onMakeOffer) {
+      onMakeOffer(offerTarget.id, salary, length, fee);
     }
+    setOfferTarget(null);
   };
 
   const handleConfirmHire = (role: CoachRole) => {
@@ -357,13 +390,44 @@ export function TransferMarket({ state, onHireCoach, onFireCoach }: Props) {
 
           <div className="text-dim text-xs">{filtered.length} players found</div>
 
+          {myOffers.length > 0 && (
+            <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+              <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 6 }}>Your Offers</div>
+              <div className="flex-col gap-1">
+                {myOffers.map(offer => {
+                  const p = state.players.get(offer.playerId);
+                  if (!p) return null;
+                  const statusColor = offer.status === 'accepted' ? 'var(--teal)'
+                    : offer.status === 'rejected' ? 'var(--red)'
+                    : offer.status === 'countered' ? 'var(--amber)'
+                    : 'var(--text-secondary)';
+                  return (
+                    <div key={offer.id} className="flex justify-between items-center" style={{ padding: '5px 8px', background: 'var(--bg-2)', border: '1px solid var(--border)', fontSize: 12 }}>
+                      <div className="flex gap-2 items-center">
+                        <RoleBadge role={p.primaryRole} />
+                        <span style={{ fontWeight: 600 }}>{p.alias}</span>
+                        <span className="text-dim">${offer.offeredSalary.toLocaleString()}/yr · {offer.contractLength}yr</span>
+                      </div>
+                      <div className="flex gap-2 items-center">
+                        {offer.status === 'countered' && offer.counterSalary && (
+                          <span style={{ color: 'var(--amber)', fontSize: 11 }}>counter: ${offer.counterSalary.toLocaleString()}/yr</span>
+                        )}
+                        <span className="font-head uppercase" style={{ color: statusColor, fontSize: 11 }}>{offer.status}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="scroll-area flex-col gap-2" style={{ flex: 1 }}>
             {filtered.map(p => (
               <PlayerCard
                 key={p.id}
                 player={p}
                 onOffer={setOfferTarget}
-                showOffer={!sentOffers.includes(p.id)}
+                showOffer={!pendingOfferPlayerIds.has(p.id)}
               />
             ))}
             {filtered.length === 0 && (

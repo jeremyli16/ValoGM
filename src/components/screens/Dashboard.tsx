@@ -1,4 +1,5 @@
 import type { GameState, ScheduledMatch, Notification, StandingsRow } from '../../types';
+import { BENCH_SALARY_FACTOR } from '../../types';
 import { sortStandings } from '../../engine/leagueInit';
 
 interface Props {
@@ -43,9 +44,13 @@ function TeamMoraleBar({ morale }: { morale: number }) {
 function NotifItem({ notif }: { notif: Notification }) {
   const icon = notif.type === 'match_result'
     ? (notif.title.includes('Victory') ? '▲' : '▼')
-    : notif.type === 'contract_expiring' ? '!' : '•';
+    : notif.type === 'contract_expiring' ? '!'
+    : notif.type === 'transfer_offer' ? '⇄'
+    : '•';
   const color = notif.type === 'match_result'
     ? (notif.title.includes('Victory') ? 'var(--teal)' : 'var(--red)')
+    : notif.type === 'transfer_offer'
+    ? (notif.title.includes('Accepted') ? 'var(--teal)' : notif.title.includes('Counter') ? 'var(--amber)' : 'var(--text-secondary)')
     : 'var(--amber)';
   return (
     <div className="flex gap-2 items-center" style={{ padding: '6px 0', borderBottom: '1px solid var(--border-dim)' }}>
@@ -66,6 +71,10 @@ export function Dashboard({ state }: Props) {
   const recentNotifs = state.notifications.slice(-8).reverse();
 
   const rosterPlayers = (team?.rosterIds ?? []).map(id => state.players.get(id)).filter(Boolean);
+  const benchPlayers = (team?.subIds ?? []).map(id => state.players.get(id)).filter(Boolean);
+  const payroll =
+    rosterPlayers.reduce((s, p) => s + (p?.salary ?? 0), 0) +
+    benchPlayers.reduce((s, p) => s + (p?.salary ?? 0) * BENCH_SALARY_FACTOR, 0);
 
   return (
     <div className="flex-col" style={{ height: '100%', padding: 16, gap: 16, overflow: 'auto' }}>
@@ -89,7 +98,8 @@ export function Dashboard({ state }: Props) {
             ${(org?.budget ?? 0).toLocaleString()}
           </div>
           <div className="text-dim text-xs">
-            Payroll: ${rosterPlayers.reduce((s, p) => s + (p?.salary ?? 0), 0).toLocaleString()}
+            Payroll: ${Math.round(payroll).toLocaleString()}
+            {benchPlayers.length > 0 && <span style={{ opacity: 0.6 }}> (bench ×0.5)</span>}
           </div>
         </div>
 

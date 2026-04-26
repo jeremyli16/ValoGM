@@ -1,6 +1,7 @@
 import type {
   GameState, ScheduledMatch, Player, Team, Notification,
   StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole, Coach,
+  Contract, TransferOffer, TransferStatus,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -491,6 +492,183 @@ export function autoFillRoster(state: GameState): GameState {
   return state;
 }
 
+// ─── Transfer System ─────────────────────────────────────────────────────────
+
+export function computeBuyout(
+  player: Player,
+  contract: Contract,
+  team: Team,
+  season: number,
+): number {
+  const yearsLeft = Math.max(1, contract.endSeason - season + 1);
+  // Skill multiplier 0.75–1.5 based on aim+gameSense
+  const skillMod = 0.75 + (player.aim + player.gameSense) / 200 * 0.75;
+  // Bench discount: benched players cost less to buy out
+  const benchMod = team.subIds.includes(player.id) ? 0.6 : 1.0;
+  return Math.round(contract.salary * yearsLeft * skillMod * benchMod / 10_000) * 10_000;
+}
+
+function evaluateOffer(
+  offer: TransferOffer,
+  player: Player,
+  state: GameState,
+  rng: () => number,
+): { status: TransferStatus; counterSalary?: number } {
+  // Buyout gate for contracted players
+  if (player.teamId) {
+    const sellingTeam = state.teams.get(player.teamId);
+    const contract = player.contractId ? state.contracts.get(player.contractId) : undefined;
+    if (sellingTeam && contract) {
+      const required = computeBuyout(player, contract, sellingTeam, state.season);
+      if (offer.fee < required) return { status: 'rejected' };
+    }
+  }
+
+  // Salary score 0–70
+  const ratio = offer.offeredSalary / Math.max(1, player.salary);
+  const salaryScore =
+    ratio >= 1.5 ? 70 :
+    ratio >= 1.0 ? 35 + (ratio - 1.0) * 70 :
+    ratio >= 0.7 ? Math.max(0, (ratio - 0.7) * 117) : 0;
+
+  // Team quality delta −10 to +20 (is the buying team doing better than current team?)
+  const buyingTeam = state.teams.get(offer.fromTeamId);
+  const currentTeam = player.teamId ? state.teams.get(player.teamId) : null;
+  const buyRate = buyingTeam ? buyingTeam.wins / Math.max(1, buyingTeam.wins + buyingTeam.losses) : 0.5;
+  const curRate = currentTeam ? currentTeam.wins / Math.max(1, currentTeam.wins + currentTeam.losses) : 0.4;
+  const teamScore = Math.max(-10, Math.min(20, (buyRate - curRate) * 40));
+
+  // Morale: unhappy players are more willing to leave
+  const moraleScore = (75 - player.morale) * 0.3;
+
+  // Free agent / bench bonuses
+  const freeAgentBonus = player.teamId === null ? 35 : 0;
+  const benchBonus = currentTeam?.subIds.includes(player.id) ? 10 : 0;
+
+  const prob = Math.max(5, Math.min(95, salaryScore + teamScore + moraleScore + freeAgentBonus + benchBonus));
+
+  if (rng() * 100 < prob) return { status: 'accepted' };
+
+  // Counter: in the "maybe" zone, suggest a salary that would tip them over
+  if (ratio >= 0.8 && ratio < 1.3 && rng() * 100 < 35) {
+    const counter = Math.round(Math.max(player.salary * 1.05, offer.offeredSalary * 1.2) / 5_000) * 5_000;
+    return { status: 'countered', counterSalary: counter };
+  }
+
+  return { status: 'rejected' };
+}
+
+function executeTransfer(offer: TransferOffer, player: Player, state: GameState): void {
+  const newTeamId = offer.fromTeamId;
+
+  // Detach from old team or free agent list
+  if (player.teamId) {
+    const oldTeam = state.teams.get(player.teamId);
+    if (oldTeam) {
+      state.teams.set(oldTeam.id, {
+        ...oldTeam,
+        rosterIds: oldTeam.rosterIds.filter(id => id !== player.id),
+        subIds: oldTeam.subIds.filter(id => id !== player.id),
+      });
+    }
+  } else {
+    state.freeAgents = state.freeAgents.filter(id => id !== player.id);
+  }
+
+  // New contract
+  const contractId = `tf_${offer.id}`;
+  state.contracts.set(contractId, {
+    id: contractId,
+    playerId: player.id,
+    teamId: newTeamId,
+    salary: offer.offeredSalary,
+    length: offer.contractLength,
+    buyout: Math.round(offer.offeredSalary * 2),
+    startSeason: state.season,
+    endSeason: state.season + offer.contractLength - 1,
+  });
+
+  // Add to new team's bench (fresh signings always start on bench)
+  const newTeam = state.teams.get(newTeamId);
+  if (newTeam) {
+    state.teams.set(newTeamId, {
+      ...newTeam,
+      subIds: [...newTeam.subIds.filter(id => id !== player.id), player.id],
+    });
+  }
+
+  state.players.set(player.id, { ...player, teamId: newTeamId, contractId, salary: offer.offeredSalary });
+  state.dirtyPlayers.add(player.id);
+}
+
+function processTransferOffers(state: GameState): GameState {
+  const pending = state.transferOffers.filter(o => o.status === 'pending');
+  if (pending.length === 0) return state;
+
+  const rng = createRng(state.seed + state.season * 100 + state.week + 50_000);
+
+  for (const offer of pending) {
+    const player = state.players.get(offer.playerId);
+    if (!player) { offer.status = 'rejected'; continue; }
+
+    const result = evaluateOffer(offer, player, state, rng);
+    offer.status = result.status;
+    if (result.counterSalary) offer.counterSalary = result.counterSalary;
+
+    if (result.status === 'accepted') executeTransfer(offer, player, state);
+
+    state.notifications.push({
+      id: notifId(),
+      type: 'transfer_offer',
+      title: result.status === 'accepted' ? 'Transfer Accepted!' :
+             result.status === 'countered' ? 'Counter Offer Received' : 'Transfer Rejected',
+      body: result.status === 'accepted'
+        ? `${player.alias} accepted your offer and has joined your squad.`
+        : result.status === 'countered'
+        ? `${player.alias} will consider an offer of $${result.counterSalary?.toLocaleString()}/yr.`
+        : `${player.alias} declined your offer.`,
+      week: state.week,
+      read: false,
+      data: { offerId: offer.id, playerId: player.id },
+    });
+  }
+
+  return state;
+}
+
+let _offerSeq = 0;
+
+export function makeTransferOffer(
+  state: GameState,
+  playerId: string,
+  offeredSalary: number,
+  contractLength: number,
+  fee: number,
+): GameState {
+  const player = state.players.get(playerId);
+  if (!player) return state;
+
+  // Prevent duplicate pending offers
+  const hasPending = state.transferOffers.some(
+    o => o.playerId === playerId && o.fromTeamId === state.playerTeamId && o.status === 'pending',
+  );
+  if (hasPending) return state;
+
+  const offer: TransferOffer = {
+    id: `offer_${state.season}_${state.week}_${++_offerSeq}`,
+    playerId,
+    fromTeamId: state.playerTeamId,
+    toTeamId: player.teamId ?? '',
+    fee,
+    offeredSalary,
+    contractLength,
+    status: 'pending',
+    deadline: state.week,
+  };
+
+  return { ...state, transferOffers: [...state.transferOffers, offer] };
+}
+
 // ─── Main advanceWeek ─────────────────────────────────────────────────────────
 
 export function advanceWeek(state: GameState): GameState {
@@ -498,6 +676,8 @@ export function advanceWeek(state: GameState): GameState {
     state.phase = 'preseason';
     return state;
   }
+
+  state = processTransferOffers(state);
 
   if (state.phase === 'preseason') {
     state.week++;

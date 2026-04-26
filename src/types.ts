@@ -148,13 +148,14 @@ export interface Contract {
 export interface TransferOffer {
   id: string;
   playerId: string;
-  fromTeamId: string;
-  toTeamId: string;
+  fromTeamId: string;  // buying team (state.playerTeamId)
+  toTeamId: string;    // player's current team, or '' for free agents
   fee: number;
   offeredSalary: number;
   contractLength: number;
   status: TransferStatus;
   deadline: number;
+  counterSalary?: number;
 }
 
 // ─── Match & Scheduling ──────────────────────────────────────────────────────
@@ -429,6 +430,10 @@ export const OFF_ROLE_BASE: Record<PlayerArchetype, number> = {
   journeyman: 50,
   specialist: 20,
 };
+
+// ─── Transfer Constants ───────────────────────────────────────────────────────
+
+export const BENCH_SALARY_FACTOR = 0.5;
 
 // ─── Morale Constants ─────────────────────────────────────────────────────────
 
