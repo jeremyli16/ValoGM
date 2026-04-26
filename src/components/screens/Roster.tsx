@@ -6,6 +6,7 @@ import { StatBar } from '../shared/StatBar';
 interface Props {
   state: GameState;
   onMovePlayer: (playerId: string, to: 'starter' | 'bench') => void;
+  onReleasePlayer?: (playerId: string) => void;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -44,14 +45,16 @@ function computeSeasonAvg(playerId: string, state: GameState): SeasonAvg | null 
   };
 }
 
-function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, onMove }: {
+function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, onMove, onRelease }: {
   player: Player;
   roleRatings: PlayerRoleRatingRecord[];
   seasonAvg: SeasonAvg | null;
   isStarter: boolean;
   canPromote: boolean;
   onMove: (playerId: string, to: 'starter' | 'bench') => void;
+  onRelease?: (playerId: string) => void;
 }) {
+  const [confirmRelease, setConfirmRelease] = useState(false);
   return (
     <div className="card p-4 flex-col gap-3" style={{ minWidth: 300 }}>
       <div>
@@ -151,7 +154,7 @@ function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, o
         <div className="text-dim text-xs">No matches played this season.</div>
       )}
 
-      <div style={{ paddingTop: 4 }}>
+      <div style={{ paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {isStarter ? (
           <button className="btn btn-red" style={{ width: '100%' }} onClick={() => onMove(player.id, 'bench')}>
             Move to Bench
@@ -166,6 +169,30 @@ function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, o
           >
             Promote to Starting
           </button>
+        )}
+        {onRelease && (
+          confirmRelease ? (
+            <div className="flex gap-2">
+              <button
+                className="btn btn-red"
+                style={{ flex: 1, fontSize: 12 }}
+                onClick={() => { onRelease(player.id); setConfirmRelease(false); }}
+              >
+                Confirm Release
+              </button>
+              <button className="btn" style={{ flex: 1, fontSize: 12 }} onClick={() => setConfirmRelease(false)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              className="btn"
+              style={{ width: '100%', fontSize: 12, color: 'var(--red)', borderColor: 'var(--red)' }}
+              onClick={() => setConfirmRelease(true)}
+            >
+              Release Player
+            </button>
+          )
         )}
       </div>
     </div>
@@ -190,7 +217,7 @@ function PlayerRow({ player, selected, onClick }: { player: Player; selected: bo
   );
 }
 
-export function Roster({ state, onMovePlayer }: Props) {
+export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'starters' | 'subs'>('starters');
 
@@ -262,6 +289,7 @@ export function Roster({ state, onMovePlayer }: Props) {
             isStarter={starterIds.has(selectedPlayer.id)}
             canPromote={starters.length < 5}
             onMove={onMovePlayer}
+            onRelease={onReleasePlayer ? (id) => { onReleasePlayer(id); setSelectedId(null); } : undefined}
           />
         </div>
       )}

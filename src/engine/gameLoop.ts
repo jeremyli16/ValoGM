@@ -636,6 +636,29 @@ function processTransferOffers(state: GameState): GameState {
   return state;
 }
 
+export function releasePlayer(state: GameState, playerId: string): GameState {
+  const player = state.players.get(playerId);
+  if (!player || player.teamId !== state.playerTeamId) return state;
+
+  const team = state.teams.get(state.playerTeamId);
+  if (!team) return state;
+
+  state.teams.set(team.id, {
+    ...team,
+    rosterIds: team.rosterIds.filter(id => id !== playerId),
+    subIds: team.subIds.filter(id => id !== playerId),
+  });
+
+  state.players.set(playerId, { ...player, teamId: null, contractId: null });
+  state.dirtyPlayers.add(playerId);
+
+  if (!state.freeAgents.includes(playerId)) {
+    state.freeAgents = [...state.freeAgents, playerId];
+  }
+
+  return { ...state };
+}
+
 let _offerSeq = 0;
 
 export function makeTransferOffer(
