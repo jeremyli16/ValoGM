@@ -8,7 +8,7 @@ import {
   getLossBonus, SURVIVAL_BONUS, MAP_POOL,
 } from '../types';
 import type { SeededRng } from './rng';
-import { randFloat, randInt, randChoice, shuffle, clamp } from './rng';
+import { randFloat, randInt, randChoice, shuffle, clamp, weightedChoice } from './rng';
 
 // ─── Player State for sim ────────────────────────────────────────────────────
 
@@ -120,6 +120,22 @@ interface RoundOutcome {
   damage: number;
 }
 
+function playerSkillScore(p: PlayerState): number {
+  return p.trueAim * 0.55 + p.trueGameSense * 0.30 + p.clutch * 0.15 + 1;
+}
+
+// Weighted sampling without replacement: pick `count` indices from players, weighted by skill.
+function pickSurvivorIndices(rng: SeededRng, players: PlayerState[], count: number): Set<number> {
+  const survivors = new Set<number>();
+  const pool = players.map((p, i) => ({ i, w: playerSkillScore(p) }));
+  for (let k = 0; k < count && pool.length > 0; k++) {
+    const chosen = weightedChoice(rng, pool, pool.map(x => x.w));
+    survivors.add(chosen.i);
+    pool.splice(pool.indexOf(chosen), 1);
+  }
+  return survivors;
+}
+
 function generateRoundStats(
   attackers: PlayerState[],
   defenders: PlayerState[],
@@ -127,7 +143,6 @@ function generateRoundStats(
   planted: boolean,
   rng: SeededRng
 ): { attackerOutcomes: RoundOutcome[]; defenderOutcomes: RoundOutcome[] } {
-  const totalKills = randInt(rng, 2, 5);
   const attackerOutcomes: RoundOutcome[] = attackers.map(() => ({
     survived: false, kills: 0, assists: 0, planted, damage: 0,
   }));
@@ -135,31 +150,41 @@ function generateRoundStats(
     survived: false, kills: 0, assists: 0, planted: false, damage: 0,
   }));
 
-  // Winning team survives more
-  const attackerSurvivors = attackerWins ? randInt(rng, 1, 3) : randInt(rng, 0, 1);
-  const defenderSurvivors = !attackerWins ? randInt(rng, 1, 3) : randInt(rng, 0, 1);
+  const winners = attackerWins ? attackers : defenders;
+  const losers  = attackerWins ? defenders : attackers;
+  const winnerOutcomes = attackerWins ? attackerOutcomes : defenderOutcomes;
+  const loserOutcomes  = attackerWins ? defenderOutcomes : attackerOutcomes;
 
-  const atkIndices = shuffle(rng, [0, 1, 2, 3, 4]);
-  const defIndices = shuffle(rng, [0, 1, 2, 3, 4]);
-  atkIndices.slice(0, attackerSurvivors).forEach(i => { attackerOutcomes[i].survived = true; });
-  defIndices.slice(0, defenderSurvivors).forEach(i => { defenderOutcomes[i].survived = true; });
+  // Skill-weighted survivor selection
+  const winnerSurvivorCount = randInt(rng, 1, 3);
+  const loserSurvivorCount  = randInt(rng, 0, 1);
+  pickSurvivorIndices(rng, winners, winnerSurvivorCount).forEach(i => { winnerOutcomes[i].survived = true; });
+  pickSurvivorIndices(rng, losers,  loserSurvivorCount).forEach(i =>  { loserOutcomes[i].survived  = true; });
 
-  // Assign kills weighted by which side won
-  for (let k = 0; k < totalKills; k++) {
-    const killerIsAttacker = rng() < (attackerWins ? 0.6 : 0.4);
-    if (killerIsAttacker) {
-      attackerOutcomes[Math.floor(rng() * 5)].kills++;
-    } else {
-      defenderOutcomes[Math.floor(rng() * 5)].kills++;
+  // Kill assignment: each death → 1 kill credited to a skill-weighted opponent.
+  // This guarantees total kills = total deaths per round.
+  const winnerWeights = winners.map(playerSkillScore);
+  const loserWeights  = losers.map(playerSkillScore);
+  const winnerIndices = [0, 1, 2, 3, 4];
+  const loserIndices  = [0, 1, 2, 3, 4];
+
+  loserOutcomes.forEach((o, i) => {
+    if (!o.survived) {
+      winnerOutcomes[weightedChoice(rng, winnerIndices, winnerWeights)].kills++;
     }
-  }
-
-  // Assign damage
-  [...attackerOutcomes, ...defenderOutcomes].forEach(o => {
-    o.damage = o.kills * randInt(rng, 100, 180) + randInt(rng, 0, 80);
+  });
+  winnerOutcomes.forEach((o, i) => {
+    if (!o.survived) {
+      loserOutcomes[weightedChoice(rng, loserIndices, loserWeights)].kills++;
+    }
   });
 
-  // Distribute assists: each kill has ~60% chance of crediting a different teammate
+  // Damage: kill damage + chip damage (everyone deals some damage each round).
+  [...attackerOutcomes, ...defenderOutcomes].forEach(o => {
+    o.damage = o.kills * randInt(rng, 100, 150) + randInt(rng, 10, 80);
+  });
+
+  // Assists: each kill has ~60% chance of crediting a different teammate.
   [attackerOutcomes, defenderOutcomes].forEach(outcomes => {
     outcomes.forEach((o, i) => {
       for (let k = 0; k < o.kills; k++) {
