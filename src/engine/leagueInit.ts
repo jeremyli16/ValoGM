@@ -179,11 +179,7 @@ function assignRoster(
     }
   }
 
-  // Sub
-  const subEligible = players.filter(p => !p.teamId && !rostered.has(p.id)).slice(0, 1);
-  const subs = subEligible.slice(0, 1);
-
-  [...roster, ...subs].forEach(p => {
+  roster.forEach(p => {
     p.teamId = team.id;
     const contractId = `c${p.id}`;
     p.contractId = contractId;
@@ -200,7 +196,6 @@ function assignRoster(
   });
 
   team.rosterIds = roster.map(p => p.id);
-  team.subIds = subs.map(p => p.id);
 }
 
 // ─── Schedule Generation ──────────────────────────────────────────────────────
