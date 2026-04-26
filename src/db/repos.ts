@@ -128,6 +128,21 @@ export const contractRepo = {
   },
 };
 
+// ─── PlayerMatchStatsRepository ───────────────────────────────────────────────
+
+export const playerMatchStatsRepo = {
+  async putMany(stats: (PlayerMatchStat & { id: string; season: number })[]): Promise<void> {
+    await bulkPut('playerMatchStats', stats);
+  },
+  async getByPlayer(playerId: string): Promise<(PlayerMatchStat & { id: string; season: number })[]> {
+    return (await getDb()).getAllFromIndex('playerMatchStats', 'by-player', playerId);
+  },
+  async getByPlayerSeason(playerId: string, season: number): Promise<(PlayerMatchStat & { id: string; season: number })[]> {
+    const all = await (await getDb()).getAllFromIndex('playerMatchStats', 'by-player', playerId);
+    return all.filter(s => s.season === season);
+  },
+};
+
 // ─── StandingsRepository ──────────────────────────────────────────────────────
 
 export const standingsRepo = {
@@ -232,14 +247,22 @@ export async function persistGameState(state: GameState): Promise<void> {
     state.dirtyPlayers.clear();
   }
 
-  // 3. Dirty matches
+  // 3. Dirty matches + their player stats
   if (state.dirtyMatches.size > 0) {
     const dirty: ScheduledMatch[] = [];
+    const statsToWrite: (PlayerMatchStat & { id: string; season: number })[] = [];
     state.dirtyMatches.forEach(id => {
       const m = state.matches.get(id);
-      if (m) dirty.push(m);
+      if (!m) return;
+      dirty.push(m);
+      if (m.result?.playerStats) {
+        m.result.playerStats.forEach(s => {
+          statsToWrite.push({ ...s, id: `${m.id}_${s.playerId}`, season: m.season });
+        });
+      }
     });
     await matchRepo.putMany(dirty);
+    if (statsToWrite.length > 0) await playerMatchStatsRepo.putMany(statsToWrite);
     state.dirtyMatches.clear();
   }
 

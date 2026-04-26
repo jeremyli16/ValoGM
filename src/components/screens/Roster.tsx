@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import type { GameState, Player, PlayerRoleRatingRecord, PlayerMatchStat, Coach } from '../../types';
+import { useState, useEffect } from 'react';
+import type { GameState, Player, PlayerRoleRatingRecord, Coach } from '../../types';
+import { playerMatchStatsRepo } from '../../db/repos';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
 
@@ -25,23 +26,16 @@ interface SeasonAvg {
   rating: number;
 }
 
-function computeSeasonAvg(playerId: string, state: GameState): SeasonAvg | null {
-  const entries: PlayerMatchStat[] = [];
-  state.matches.forEach(m => {
-    if (m.result && m.season === state.season) {
-      const stat = m.result.playerStats.find(s => s.playerId === playerId);
-      if (stat) entries.push(stat);
-    }
-  });
-  if (entries.length === 0) return null;
-  const n = entries.length;
+function avgFromStats(stats: { kills: number; deaths: number; assists: number; adr: number; rating: number }[]): SeasonAvg | null {
+  if (stats.length === 0) return null;
+  const n = stats.length;
   return {
-    games: n,
-    kills:   Math.round(entries.reduce((s, e) => s + e.kills,   0) / n * 10) / 10,
-    deaths:  Math.round(entries.reduce((s, e) => s + e.deaths,  0) / n * 10) / 10,
-    assists: Math.round(entries.reduce((s, e) => s + e.assists, 0) / n * 10) / 10,
-    adr:     Math.round(entries.reduce((s, e) => s + e.adr,     0) / n),
-    rating:  Math.round(entries.reduce((s, e) => s + e.rating,  0) / n * 100) / 100,
+    games:   n,
+    kills:   Math.round(stats.reduce((s, e) => s + e.kills,   0) / n * 10) / 10,
+    deaths:  Math.round(stats.reduce((s, e) => s + e.deaths,  0) / n * 10) / 10,
+    assists: Math.round(stats.reduce((s, e) => s + e.assists, 0) / n * 10) / 10,
+    adr:     Math.round(stats.reduce((s, e) => s + e.adr,     0) / n),
+    rating:  Math.round(stats.reduce((s, e) => s + e.rating,  0) / n * 100) / 100,
   };
 }
 
@@ -265,6 +259,7 @@ function CoachSection({ coaches }: { coaches: { coach: Coach; role: 'head' | 'as
 export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'starters' | 'subs'>('starters');
+  const [statsCache, setStatsCache] = useState<Map<string, SeasonAvg>>(new Map());
 
   const team = state.teams.get(state.playerTeamId);
   const starterIds = new Set(team?.rosterIds ?? []);
@@ -284,6 +279,24 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
     const c = state.coaches.get(team.assistantCoachId);
     if (c) coachEntries.push({ coach: c, role: 'assistant' });
   }
+
+  useEffect(() => {
+    const team = state.teams.get(state.playerTeamId);
+    const playerIds = [...(team?.rosterIds ?? []), ...(team?.subIds ?? [])];
+    if (playerIds.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      playerIds.map(id =>
+        playerMatchStatsRepo.getByPlayerSeason(id, state.season).then(s => [id, avgFromStats(s)] as const)
+      )
+    ).then(entries => {
+      if (cancelled) return;
+      const map = new Map<string, SeasonAvg>();
+      entries.forEach(([id, avg]) => { if (avg) map.set(id, avg); });
+      setStatsCache(map);
+    });
+    return () => { cancelled = true; };
+  }, [state.playerTeamId, state.season, state.week]);
 
   const selectedPlayer = selectedId ? state.players.get(selectedId) ?? null : null;
   const selectedRoleRatings = selectedPlayer
@@ -341,7 +354,7 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
           <PlayerDetail
             player={selectedPlayer}
             roleRatings={selectedRoleRatings}
-            seasonAvg={computeSeasonAvg(selectedPlayer.id, state)}
+            seasonAvg={statsCache.get(selectedPlayer.id) ?? null}
             isStarter={starterIds.has(selectedPlayer.id)}
             canPromote={starters.length < 5}
             onMove={onMovePlayer}

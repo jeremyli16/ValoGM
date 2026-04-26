@@ -115,6 +115,7 @@ function decideTeamBuy(
 interface RoundOutcome {
   survived: boolean;
   kills: number;
+  assists: number;
   planted: boolean;
   damage: number;
 }
@@ -126,40 +127,48 @@ function generateRoundStats(
   planted: boolean,
   rng: SeededRng
 ): { attackerOutcomes: RoundOutcome[]; defenderOutcomes: RoundOutcome[] } {
-  // Distribute kills
   const totalKills = randInt(rng, 2, 5);
   const attackerOutcomes: RoundOutcome[] = attackers.map(() => ({
-    survived: false, kills: 0, planted, damage: 0,
+    survived: false, kills: 0, assists: 0, planted, damage: 0,
   }));
   const defenderOutcomes: RoundOutcome[] = defenders.map(() => ({
-    survived: false, kills: 0, planted: false, damage: 0,
+    survived: false, kills: 0, assists: 0, planted: false, damage: 0,
   }));
 
   // Winning team survives more
   const attackerSurvivors = attackerWins ? randInt(rng, 1, 3) : randInt(rng, 0, 1);
   const defenderSurvivors = !attackerWins ? randInt(rng, 1, 3) : randInt(rng, 0, 1);
 
-  // Mark survivors randomly
   const atkIndices = shuffle(rng, [0, 1, 2, 3, 4]);
   const defIndices = shuffle(rng, [0, 1, 2, 3, 4]);
   atkIndices.slice(0, attackerSurvivors).forEach(i => { attackerOutcomes[i].survived = true; });
   defIndices.slice(0, defenderSurvivors).forEach(i => { defenderOutcomes[i].survived = true; });
 
-  // Assign kills weighted by combat power
+  // Assign kills weighted by which side won
   for (let k = 0; k < totalKills; k++) {
     const killerIsAttacker = rng() < (attackerWins ? 0.6 : 0.4);
     if (killerIsAttacker) {
-      const idx = Math.floor(rng() * 5);
-      attackerOutcomes[idx].kills++;
+      attackerOutcomes[Math.floor(rng() * 5)].kills++;
     } else {
-      const idx = Math.floor(rng() * 5);
-      defenderOutcomes[idx].kills++;
+      defenderOutcomes[Math.floor(rng() * 5)].kills++;
     }
   }
 
   // Assign damage
   [...attackerOutcomes, ...defenderOutcomes].forEach(o => {
     o.damage = o.kills * randInt(rng, 100, 180) + randInt(rng, 0, 80);
+  });
+
+  // Distribute assists: each kill has ~60% chance of crediting a different teammate
+  [attackerOutcomes, defenderOutcomes].forEach(outcomes => {
+    outcomes.forEach((o, i) => {
+      for (let k = 0; k < o.kills; k++) {
+        if (rng() < 0.6) {
+          const candidates = [0, 1, 2, 3, 4].filter(x => x !== i);
+          outcomes[candidates[Math.floor(rng() * candidates.length)]].assists++;
+        }
+      }
+    });
   });
 
   return { attackerOutcomes, defenderOutcomes };
@@ -224,8 +233,6 @@ function simOvertimeRounds(
   lastAttackSide: 'A' | 'B',
   rng: SeededRng
 ): { otA: number; otB: number } {
-  // Sides switch at OT start: whoever attacked last in regulation now defends.
-  // Sides then alternate every round. Play until one team leads by 2.
   let otAttackSide: 'A' | 'B' = lastAttackSide === 'A' ? 'B' : 'A';
   let otA = 0, otB = 0;
 
@@ -240,7 +247,6 @@ function simOvertimeRounds(
     otAttackSide = otAttackSide === 'A' ? 'B' : 'A';
   }
 
-  // Pathological fallback (probability ~(0.5)^20 ≈ negligible)
   if (Math.abs(otA - otB) < 2) {
     if (rng() < 0.5) otA += 2; else otB += 2;
   }
@@ -272,40 +278,36 @@ function buildPlayerState(
   };
 }
 
+// statesA/statesB are mutated — stats for this map are accumulated into them.
 function simMap(
   teamA: Team,
   teamB: Team,
   mapName: string,
-  playersA: Player[],
-  playersB: Player[],
-  roleRatings: Map<string, PlayerRoleRatingRecord>,
+  statesA: PlayerState[],
+  statesB: PlayerState[],
   rng: SeededRng,
-  modA = 1.0,
-  modB = 1.0
 ): MapResult {
-  const statesA = playersA.map(p => {
-    const s = buildPlayerState(p, roleRatings);
-    s.trueAim = clamp(s.trueAim * modA, 1, 100);
-    s.trueGameSense = clamp(s.trueGameSense * modA, 1, 100);
-    return s;
-  });
-  const statesB = playersB.map(p => {
-    const s = buildPlayerState(p, roleRatings);
-    s.trueAim = clamp(s.trueAim * modB, 1, 100);
-    s.trueGameSense = clamp(s.trueGameSense * modB, 1, 100);
-    return s;
-  });
-
-  const econA: PlayerEconomy[] = statesA.map(s => ({ playerId: s.id, credits: 800 }));
-  const econB: PlayerEconomy[] = statesB.map(s => ({ playerId: s.id, credits: 800 }));
-
-  // Map pool practice bonus
   const practiceA = teamA.mapPool[mapName] ?? 50;
   const practiceB = teamB.mapPool[mapName] ?? 50;
   const mapBonusA = 1.0 + (practiceA - 50) * 0.001;
   const mapBonusB = 1.0 + (practiceB - 50) * 0.001;
-  statesA.forEach(s => { s.trueAim *= mapBonusA; s.trueGameSense *= mapBonusA; });
-  statesB.forEach(s => { s.trueAim *= mapBonusB; s.trueGameSense *= mapBonusB; });
+
+  // Local copies with map bonus and zeroed stats — don't bleed aim/gs between maps
+  const localA: PlayerState[] = statesA.map(s => ({
+    ...s,
+    trueAim: clamp(s.trueAim * mapBonusA, 1, 100),
+    trueGameSense: clamp(s.trueGameSense * mapBonusA, 1, 100),
+    kills: 0, deaths: 0, assists: 0, roundDamage: 0,
+  }));
+  const localB: PlayerState[] = statesB.map(s => ({
+    ...s,
+    trueAim: clamp(s.trueAim * mapBonusB, 1, 100),
+    trueGameSense: clamp(s.trueGameSense * mapBonusB, 1, 100),
+    kills: 0, deaths: 0, assists: 0, roundDamage: 0,
+  }));
+
+  const econA: PlayerEconomy[] = localA.map(s => ({ playerId: s.id, credits: 800 }));
+  const econB: PlayerEconomy[] = localB.map(s => ({ playerId: s.id, credits: 800 }));
 
   let scoreA = 0, scoreB = 0;
   let attackSide: 'A' | 'B' = 'A';
@@ -318,8 +320,8 @@ function simMap(
     if (scoreA >= 13 || scoreB >= 13) break;
     if (round === 13) attackSide = attackSide === 'A' ? 'B' : 'A';
 
-    const atk = attackSide === 'A' ? statesA : statesB;
-    const def = attackSide === 'A' ? statesB : statesA;
+    const atk = attackSide === 'A' ? localA : localB;
+    const def = attackSide === 'A' ? localB : localA;
     const atkEcon = attackSide === 'A' ? econA : econB;
     const defEcon = attackSide === 'A' ? econB : econA;
     const atkStreak = attackSide === 'A' ? lossStreakA : lossStreakB;
@@ -341,28 +343,26 @@ function simMap(
     if (aWon) { scoreA++; lossStreakA = 0; lossStreakB++; }
     else       { scoreB++; lossStreakB = 0; lossStreakA++; }
 
-    // Update economies
     const atkOutcomes = result.attackerOutcomes;
     const defOutcomes = result.defenderOutcomes;
     const atkTeamWon = result.winner === 'attack';
 
     atkEcon.forEach((econ, i) => {
-      const o = atkOutcomes[i];
-      atkEcon[i] = updateEconomy(econ, { ...o, planted: result.planted }, atkTeamWon, atkStreak, true);
+      atkEcon[i] = updateEconomy(econ, { ...atkOutcomes[i], planted: result.planted }, atkTeamWon, atkStreak, true);
     });
     defEcon.forEach((econ, i) => {
-      const o = defOutcomes[i];
-      defEcon[i] = updateEconomy(econ, { ...o, planted: false }, !atkTeamWon, defStreak, false);
+      defEcon[i] = updateEconomy(econ, { ...defOutcomes[i], planted: false }, !atkTeamWon, defStreak, false);
     });
 
-    // Accumulate stats back to player states
     atk.forEach((s, i) => {
-      s.kills += atkOutcomes[i].kills;
+      s.kills      += atkOutcomes[i].kills;
+      s.assists    += atkOutcomes[i].assists;
       s.roundDamage += atkOutcomes[i].damage;
       if (!atkOutcomes[i].survived) s.deaths++;
     });
     def.forEach((s, i) => {
-      s.kills += defOutcomes[i].kills;
+      s.kills      += defOutcomes[i].kills;
+      s.assists    += defOutcomes[i].assists;
       s.roundDamage += defOutcomes[i].damage;
       if (!defOutcomes[i].survived) s.deaths++;
     });
@@ -376,12 +376,25 @@ function simMap(
     });
   }
 
-  // OT
   if (scoreA === 12 && scoreB === 12) {
-    const { otA, otB } = simOvertimeRounds(statesA, statesB, attackSide, rng);
+    const { otA, otB } = simOvertimeRounds(localA, localB, attackSide, rng);
     scoreA += otA;
     scoreB += otB;
   }
+
+  // Accumulate this map's stats into the series totals
+  statesA.forEach((s, i) => {
+    s.kills      += localA[i].kills;
+    s.deaths     += localA[i].deaths;
+    s.assists    += localA[i].assists;
+    s.roundDamage += localA[i].roundDamage;
+  });
+  statesB.forEach((s, i) => {
+    s.kills      += localB[i].kills;
+    s.deaths     += localB[i].deaths;
+    s.assists    += localB[i].assists;
+    s.roundDamage += localB[i].roundDamage;
+  });
 
   return {
     mapName,
@@ -402,7 +415,6 @@ function resolveMapVeto(
 ): string[] {
   const needed = { bo1: 1, bo3: 3, bo5: 5 }[format];
   const pool = [...MAP_POOL];
-  // Sort by average team practice preference
   pool.sort((a, b) => {
     const scoreA = (teamA.mapPool[a] ?? 50) + (teamB.mapPool[a] ?? 50);
     const scoreB = (teamA.mapPool[b] ?? 50) + (teamB.mapPool[b] ?? 50);
@@ -419,19 +431,18 @@ function computePlayerStats(
   statesB: PlayerState[],
   totalRounds: number
 ): PlayerMatchStat[] {
-  const allStates = [...statesA, ...statesB];
-  return allStates.map(s => {
+  return [...statesA, ...statesB].map(s => {
     const kd = s.deaths === 0 ? s.kills : s.kills / s.deaths;
     const adr = totalRounds > 0 ? s.roundDamage / totalRounds : 0;
     const rating = clamp((kd * 0.5 + adr / 150 * 0.5), 0, 3);
     return {
       playerId: s.id,
       matchId,
-      kills: s.kills,
-      deaths: s.deaths,
+      kills:   s.kills,
+      deaths:  s.deaths,
       assists: s.assists,
-      adr: Math.round(adr),
-      rating: Math.round(rating * 100) / 100,
+      adr:     Math.round(adr),
+      rating:  Math.round(rating * 100) / 100,
     };
   });
 }
@@ -454,7 +465,6 @@ export function simMatch(
   let winsA = 0, winsB = 0;
   const mapResults: MapResult[] = [];
 
-  // Apply tactics boost: boosts effective gameSense (×0.20 max) and clutch (×0.13 max) per player
   function applyTactics(states: PlayerState[], tactics: number): PlayerState[] {
     if (tactics <= 0) return states;
     const gsMod = 1 + tactics / 500;
@@ -466,17 +476,29 @@ export function simMatch(
     }));
   }
 
-  const allStatesA: PlayerState[] = applyTactics(playersA.map(p => buildPlayerState(p, roleRatings)), coachTacticsA);
-  const allStatesB: PlayerState[] = applyTactics(playersB.map(p => buildPlayerState(p, roleRatings)), coachTacticsB);
+  function applyMod(states: PlayerState[], mod: number): PlayerState[] {
+    if (mod === 1.0) return states;
+    return states.map(s => ({
+      ...s,
+      trueAim: clamp(s.trueAim * mod, 1, 100),
+      trueGameSense: clamp(s.trueGameSense * mod, 1, 100),
+    }));
+  }
+
+  // Build series-level states — stats accumulate across all maps into these
+  const allStatesA = applyMod(
+    applyTactics(playersA.map(p => buildPlayerState(p, roleRatings)), coachTacticsA),
+    modifiers.teamAMod
+  );
+  const allStatesB = applyMod(
+    applyTactics(playersB.map(p => buildPlayerState(p, roleRatings)), coachTacticsB),
+    modifiers.teamBMod
+  );
   let totalRounds = 0;
 
   for (const mapName of maps) {
     if (winsA >= needed || winsB >= needed) break;
-    const mapResult = simMap(
-      teamA, teamB, mapName,
-      playersA, playersB, roleRatings, rng,
-      modifiers.teamAMod, modifiers.teamBMod
-    );
+    const mapResult = simMap(teamA, teamB, mapName, allStatesA, allStatesB, rng);
     mapResults.push(mapResult);
     totalRounds += mapResult.scoreA + mapResult.scoreB;
     if (mapResult.winner === 'A') winsA++; else winsB++;
@@ -484,7 +506,6 @@ export function simMatch(
 
   const playerStats = computePlayerStats(matchId, allStatesA, allStatesB, totalRounds);
 
-  // MVP = highest rated player on winning team
   const winner = winsA > winsB ? 'A' : 'B';
   const winnerIds = (winner === 'A' ? playersA : playersB).map(p => p.id);
   const mvpStat = playerStats

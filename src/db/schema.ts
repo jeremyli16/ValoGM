@@ -51,7 +51,7 @@ export interface ValoGMSchema extends DBSchema {
   };
   playerMatchStats: {
     key: string;
-    value: PlayerMatchStat & { id: string };
+    value: PlayerMatchStat & { id: string; season: number };
     indexes: {
       'by-match': string;
       'by-player': string;
