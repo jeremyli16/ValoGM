@@ -36,9 +36,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Import rule enforcement: max 1 non-home-region player in starting lineup; popup warning blocks week advancement if violated
 
 **Transfer Market**
-- Browse free agents and contracted players, filterable by role and search
-- Make offers with adjustable fee, salary, and contract length
-- Visual acceptance likelihood indicator
+- **Players tab:** Browse free agents and contracted players, filterable by role and search; make offers with adjustable fee, salary, and contract length; visual acceptance likelihood indicator
+- **Coaches tab:** View your current head and assistant coaching staff with stat bars; browse and search free agent coaches sorted by overall rating; hire via a modal with head/assistant role selection (displacing the current occupant back to free agency); release coaches back to free agency
 
 **Schedule**
 - Full season match list with W/L record summary
@@ -72,6 +71,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Role side modifiers: Duelists strong on attack, Sentinels on defense, Controllers on defense, Initiators balanced
 - Team synergy bonus (+6%) when all 4 roles are present
 - Overtime: sides switch at 12–12, alternate each round, win by 2
+- **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
 **Player Generation**
 - Five archetypes: Prodigy, Star, Veteran, Journeyman, Specialist — each with distinct age ranges, stat ceilings, and salary brackets
@@ -81,8 +81,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **Player Development**
 - Per-season aging: stats grow pre-peak, decay post-peak
-- Weekly morale tick: win/loss deltas, decay toward baseline
+- Weekly morale tick: win/loss deltas scaled by coach's Morale Boost rating (higher boost amplifies wins, cushions losses), decay toward baseline
 - Season-end development pass applied during offseason transition
+- **Passive scouting tick:** each week, the coach's effective Scouting rating raises role-rating confidence for all players on the squad (up to ~1.5 pts/week at max combined rating)
 
 **League Initialization**
 - 12 partnership teams + 8 challengers teams per region
@@ -95,9 +96,16 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - `new_game → preseason → regular_season → playoffs → offseason → regular_season → ...`
 - Each week advance simulates that week's matches, updates standings, ticks morale, and checks for phase transitions
 
+**Coaching Staff**
+- Each team may have one head coach and one optional assistant coach
+- Three ratings per coach: Tactics (match performance), Scouting (role-rating confidence), Morale Boost (win/loss morale deltas)
+- Head coach contributes at full value; assistant at 50% — effective value is their combined weighted sum
+- 42 coaches generated at game start (region-biased nationality); all teams assigned a head coach, top 8 partnership teams also receive an assistant; remainder enter the free agent pool
+- Coach salaries scale with average rating; coaches are persisted to IndexedDB and tracked via dirty flag
+
 **Persistence**
-- IndexedDB schema with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, and role ratings
-- Dirty-flag system: only modified players and matches are re-written each week
+- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, and coaches
+- Dirty-flag system: only modified players, matches, and coaches are re-written each week
 - Full save/load reconstructs all `Map<>` structures from stored arrays
 
 ---
@@ -111,10 +119,7 @@ The UI lets you compose offers (fee, salary, contract length) and calculates acc
 Expiring contracts generate notifications, but there is no UI to negotiate renewals, reject them, or let a player walk to free agency at season end. The `Decision` flow intended for this has no renderer.
 
 ### Scouting
-`PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence is set at generation and never updated — there is no action the player can take to scout opponents or improve confidence on their own players. `Organization.scoutQuality` exists but is unused.
-
-### Coaching
-`Organization.coachIntelligence` is stored and displayed nowhere. Coaches are not represented as entities, have no effect on match simulation, and have no associated UI or decisions.
+`PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.
 
 ### Map Pool
 Each team has a `mapPool: Record<string, number>` representing strength per map, and a global `MAP_POOL` constant defines the active map pool. Neither is read during match simulation — maps are selected but team map preferences have no effect on outcomes.

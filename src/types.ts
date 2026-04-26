@@ -53,6 +53,24 @@ export interface PlayerRoleRatingRecord {
   lastPlayedSeason: number | null;
 }
 
+// ─── Coach ──────────────────────────────────────────────────────────────────
+
+export type CoachRole = 'head' | 'assistant';
+
+export interface Coach {
+  id: string;
+  firstName: string;
+  lastName: string;
+  nationality: string;
+  age: number;
+  salary: number;
+  tactics: number;      // 0-99: boosts effective gameSense and clutch in matches
+  scouting: number;     // 0-99: improves role rating confidence on own team's players
+  moraleBoost: number;  // 0-99: increases win morale gain, reduces loss morale loss
+  teamId: string | null;
+  role: CoachRole | null;
+}
+
 // ─── Organization & Team ────────────────────────────────────────────────────
 
 export interface Organization {
@@ -79,7 +97,8 @@ export interface Team {
   region: RegionId;
   rosterIds: string[];
   subIds: string[];
-  coachId: string | null;
+  headCoachId: string | null;
+  assistantCoachId: string | null;
   mapPool: Record<string, number>;
   morale: number;
   chemistry: number;
@@ -266,7 +285,9 @@ export interface GameState {
   standings: Map<string, StandingsRow>;
   roleRatings: Map<string, PlayerRoleRatingRecord>;
 
+  coaches: Map<string, Coach>;
   freeAgents: string[];
+  freeAgentCoaches: string[];
   pendingDecisions: Decision[];
   notifications: Notification[];
   transferOffers: TransferOffer[];
@@ -274,6 +295,7 @@ export interface GameState {
 
   dirtyPlayers: Set<string>;
   dirtyMatches: Set<string>;
+  dirtyCoaches: Set<string>;
 }
 
 // ─── Economy Constants ────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { GameState, RegionId, Player } from './types';
+import type { GameState, RegionId, Player, CoachRole } from './types';
 import { HOME_NATIONALITIES } from './types';
 import { createNewGame, advanceWeek } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
@@ -52,6 +52,65 @@ export function App() {
     setGameState({ ...gameState });
   }, [gameState]);
 
+  const handleHireCoach = useCallback((coachId: string, role: CoachRole) => {
+    if (!gameState) return;
+    const team = gameState.teams.get(gameState.playerTeamId);
+    if (!team) return;
+    const coach = gameState.coaches.get(coachId);
+    if (!coach) return;
+
+    // Release whoever currently holds this role back to free agency
+    const displacedId = role === 'head' ? team.headCoachId : team.assistantCoachId;
+    if (displacedId) {
+      const displaced = gameState.coaches.get(displacedId);
+      if (displaced) {
+        gameState.coaches.set(displacedId, { ...displaced, teamId: null, role: null });
+        if (!gameState.freeAgentCoaches.includes(displacedId)) {
+          gameState.freeAgentCoaches = [...gameState.freeAgentCoaches, displacedId];
+        }
+        gameState.dirtyCoaches.add(displacedId);
+      }
+    }
+
+    // Assign new coach
+    gameState.coaches.set(coachId, { ...coach, teamId: gameState.playerTeamId, role });
+    gameState.freeAgentCoaches = gameState.freeAgentCoaches.filter(id => id !== coachId);
+    gameState.dirtyCoaches.add(coachId);
+
+    // Update team
+    const updatedTeam = role === 'head'
+      ? { ...team, headCoachId: coachId }
+      : { ...team, assistantCoachId: coachId };
+    gameState.teams.set(gameState.playerTeamId, updatedTeam);
+
+    setGameState({ ...gameState });
+  }, [gameState]);
+
+  const handleFireCoach = useCallback((role: CoachRole) => {
+    if (!gameState) return;
+    const team = gameState.teams.get(gameState.playerTeamId);
+    if (!team) return;
+
+    const coachId = role === 'head' ? team.headCoachId : team.assistantCoachId;
+    if (!coachId) return;
+
+    const coach = gameState.coaches.get(coachId);
+    if (coach) {
+      gameState.coaches.set(coachId, { ...coach, teamId: null, role: null });
+      if (!gameState.freeAgentCoaches.includes(coachId)) {
+        gameState.freeAgentCoaches = [...gameState.freeAgentCoaches, coachId];
+      }
+      gameState.dirtyCoaches.add(coachId);
+    }
+
+    const updatedTeam = role === 'head'
+      ? { ...team, headCoachId: null }
+      : { ...team, assistantCoachId: null };
+    gameState.teams.set(gameState.playerTeamId, updatedTeam);
+
+    setGameState({ ...gameState });
+  }, [gameState]);
+
   const handleAdvanceWeek = useCallback(async () => {
     if (!gameState) return;
 
@@ -99,7 +158,7 @@ export function App() {
       <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
         {nav === 'dashboard'  && <Dashboard  state={gameState} />}
         {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} />}
-        {nav === 'transfers'  && <TransferMarket state={gameState} />}
+        {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} />}
         {nav === 'matchday'   && <MatchDay   state={gameState} />}
         {nav === 'standings'  && <Standings  state={gameState} />}
         {nav === 'schedule'   && <Schedule   state={gameState} />}

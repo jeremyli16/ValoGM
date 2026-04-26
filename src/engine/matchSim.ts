@@ -445,14 +445,29 @@ export function simMatch(
   roleRatings: Map<string, PlayerRoleRatingRecord>,
   format: 'bo1' | 'bo3' | 'bo5',
   rng: SeededRng,
-  modifiers = { teamAMod: 1.0, teamBMod: 1.0 }
+  modifiers = { teamAMod: 1.0, teamBMod: 1.0 },
+  coachTacticsA = 0,
+  coachTacticsB = 0
 ): MatchResult {
   const maps = resolveMapVeto(teamA, teamB, format, rng);
   const needed = { bo1: 1, bo3: 2, bo5: 3 }[format];
   let winsA = 0, winsB = 0;
   const mapResults: MapResult[] = [];
-  const allStatesA: PlayerState[] = playersA.map(p => buildPlayerState(p, roleRatings));
-  const allStatesB: PlayerState[] = playersB.map(p => buildPlayerState(p, roleRatings));
+
+  // Apply tactics boost: boosts effective gameSense (×0.20 max) and clutch (×0.13 max) per player
+  function applyTactics(states: PlayerState[], tactics: number): PlayerState[] {
+    if (tactics <= 0) return states;
+    const gsMod = 1 + tactics / 500;
+    const clutchMod = 1 + tactics / 750;
+    return states.map(s => ({
+      ...s,
+      trueGameSense: Math.min(99, s.trueGameSense * gsMod),
+      clutch: Math.min(99, s.clutch * clutchMod),
+    }));
+  }
+
+  const allStatesA: PlayerState[] = applyTactics(playersA.map(p => buildPlayerState(p, roleRatings)), coachTacticsA);
+  const allStatesB: PlayerState[] = applyTactics(playersB.map(p => buildPlayerState(p, roleRatings)), coachTacticsB);
   let totalRounds = 0;
 
   for (const mapName of maps) {

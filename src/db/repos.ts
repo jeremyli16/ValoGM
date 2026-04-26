@@ -2,7 +2,7 @@ import { getDb, type SerializedGameState } from './schema';
 import type {
   Player, PlayerRoleRatingRecord, Team, Organization, League,
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
-  Notification, PlayerMatchStat, GameState, RegionId,
+  Notification, PlayerMatchStat, GameState, RegionId, Coach,
 } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -161,6 +161,26 @@ export const notifRepo = {
   },
 };
 
+// ─── CoachRepository ──────────────────────────────────────────────────────────
+
+export const coachRepo = {
+  async getAll(): Promise<Coach[]> {
+    return (await getDb()).getAll('coaches');
+  },
+  async get(id: string): Promise<Coach | undefined> {
+    return (await getDb()).get('coaches', id);
+  },
+  async getByTeam(teamId: string): Promise<Coach[]> {
+    return (await getDb()).getAllFromIndex('coaches', 'by-team', teamId);
+  },
+  async put(coach: Coach): Promise<void> {
+    await (await getDb()).put('coaches', coach);
+  },
+  async putMany(coaches: Coach[]): Promise<void> {
+    await bulkPut('coaches', coaches);
+  },
+};
+
 // ─── GameState Repository ─────────────────────────────────────────────────────
 
 export const gameStateRepo = {
@@ -187,6 +207,7 @@ export async function persistGameState(state: GameState): Promise<void> {
     regionId: state.regionId,
     seed: state.seed,
     freeAgents: state.freeAgents,
+    freeAgentCoaches: state.freeAgentCoaches,
   });
 
   // 2. Dirty players
@@ -210,6 +231,17 @@ export async function persistGameState(state: GameState): Promise<void> {
     await matchRepo.putMany(dirty);
     state.dirtyMatches.clear();
   }
+
+  // 4. Dirty coaches
+  if (state.dirtyCoaches.size > 0) {
+    const dirty: Coach[] = [];
+    state.dirtyCoaches.forEach(id => {
+      const c = state.coaches.get(id);
+      if (c) dirty.push(c);
+    });
+    await coachRepo.putMany(dirty);
+    state.dirtyCoaches.clear();
+  }
 }
 
 export async function initNewGameDb(state: GameState): Promise<void> {
@@ -221,6 +253,7 @@ export async function initNewGameDb(state: GameState): Promise<void> {
   const contracts: Contract[] = [];
   const matches: ScheduledMatch[] = [];
   const standings: (StandingsRow & { id: string })[] = [];
+  const coaches: Coach[] = [];
 
   state.players.forEach(p => players.push(p));
   state.roleRatings.forEach(rr => roleRatings.push(rr));
@@ -230,6 +263,7 @@ export async function initNewGameDb(state: GameState): Promise<void> {
   state.contracts.forEach(c => contracts.push(c));
   state.matches.forEach(m => matches.push(m));
   state.standings.forEach((row, key) => standings.push({ ...row, id: key }));
+  state.coaches.forEach(c => coaches.push(c));
 
   await Promise.all([
     playerRepo.putMany(players),
@@ -240,6 +274,7 @@ export async function initNewGameDb(state: GameState): Promise<void> {
     contractRepo.putMany(contracts),
     matchRepo.putMany(matches),
     standingsRepo.putMany(standings),
+    coachRepo.putMany(coaches),
   ]);
 
   await persistGameState(state);
@@ -249,13 +284,14 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const saved = await gameStateRepo.load();
   if (!saved) return null;
 
-  const [players, roleRatingsArr, teams, orgs, leagues, matches] = await Promise.all([
+  const [players, roleRatingsArr, teams, orgs, leagues, matches, coachesArr] = await Promise.all([
     (await getDb()).getAll('players'),
     (await getDb()).getAll('playerRoleRatings'),
     (await getDb()).getAll('teams'),
     (await getDb()).getAll('orgs'),
     (await getDb()).getAll('leagues'),
     matchRepo.getForSeason(saved.season),
+    coachRepo.getAll(),
   ]);
 
   const playerMap = new Map(players.map(p => [p.id, p]));
@@ -264,6 +300,7 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const orgMap = new Map(orgs.map(o => [o.id, o]));
   const leagueMap = new Map(leagues.map(l => [l.id, l]));
   const matchMap = new Map(matches.map(m => [m.id, m]));
+  const coachMap = new Map(coachesArr.map(c => [c.id, c]));
 
   const standingsArr = await standingsRepo.getForLeagueSeason(saved.leagueId, saved.season);
   const standingsMap = new Map(standingsArr.map(r => [r.id, r]));
@@ -281,11 +318,14 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     contracts: contractMap,
     matches: matchMap,
     standings: standingsMap,
+    coaches: coachMap,
+    freeAgentCoaches: saved.freeAgentCoaches ?? [],
     transferOffers: [],
     pendingDecisions: [],
     notifications: [],
     playoffBracket: null,
     dirtyPlayers: new Set(),
     dirtyMatches: new Set(),
+    dirtyCoaches: new Set(),
   };
 }

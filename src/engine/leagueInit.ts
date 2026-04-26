@@ -1,6 +1,6 @@
 import type {
   Player, Team, Organization, League, Contract, StandingsRow,
-  ScheduledMatch, PlayerRoleRatingRecord, RegionId, PlayerRole,
+  ScheduledMatch, PlayerRoleRatingRecord, RegionId, PlayerRole, Coach,
 } from '../types';
 import {
   LEAGUE_NAMES, LEAGUE_FORMATS, HOME_NATIONALITIES, IMPORT_LIMITS,
@@ -9,6 +9,7 @@ import {
 import type { SeededRng } from './rng';
 import { randInt, randFloat, randChoice, shuffle, clamp } from './rng';
 import { generatePlayerPool } from './playerGen';
+import { generateCoachPool } from './coachGen';
 
 // ─── Org Names per region ────────────────────────────────────────────────────
 
@@ -115,7 +116,8 @@ function generateTeam(
     region,
     rosterIds: [],
     subIds: [],
-    coachId: null,
+    headCoachId: null,
+    assistantCoachId: null,
     mapPool,
     morale: 75,
     chemistry: 65,
@@ -364,6 +366,7 @@ export interface LeagueInitResult {
   players: Player[];
   roleRatings: PlayerRoleRatingRecord[];
   contracts: Map<string, Contract>;
+  coaches: Coach[];
   league: League;
   challengers: League;
   standings: StandingsRow[];
@@ -488,11 +491,47 @@ export function initLeague(regionId: RegionId, seed: number, rng: SeededRng): Le
     ...generateSchedule(challengers, 1, rng),
   ];
 
+  // Generate coaches — all 20 teams get a head coach, top 8 partnership teams also get an assistant
+  const allCoaches = generateCoachPool(42, rng, regionId);
+  let coachIdx = 0;
+
+  // Sort partnership teams by org prestige (descending) for coach assignment
+  const partnershipByPrestige = [...teams]
+    .filter(t => partnershipTeamIds.includes(t.id))
+    .sort((a, b) => {
+      const oa = orgs.find(o => o.teamId === a.id);
+      const ob = orgs.find(o => o.teamId === b.id);
+      return (ob?.prestige ?? 0) - (oa?.prestige ?? 0);
+    });
+
+  partnershipByPrestige.forEach((team, rank) => {
+    const head = allCoaches[coachIdx++];
+    head.teamId = team.id;
+    head.role = 'head';
+    team.headCoachId = head.id;
+
+    if (rank < 8) {
+      const asst = allCoaches[coachIdx++];
+      asst.teamId = team.id;
+      asst.role = 'assistant';
+      team.assistantCoachId = asst.id;
+    }
+  });
+
+  // Challengers teams each get a head coach
+  teams.filter(t => challengersTeamIds.includes(t.id)).forEach(team => {
+    const head = allCoaches[coachIdx++];
+    head.teamId = team.id;
+    head.role = 'head';
+    team.headCoachId = head.id;
+  });
+
   return {
     orgs, teams,
     players: allPlayers,
     roleRatings: allRoleRatings,
     contracts,
+    coaches: allCoaches,
     league,
     challengers,
     standings,

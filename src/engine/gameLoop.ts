@@ -1,6 +1,6 @@
 import type {
   GameState, ScheduledMatch, Player, Team, Notification,
-  StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole,
+  StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole, Coach,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -25,11 +25,32 @@ function updateMorale(player: Player): Player {
   return { ...player, morale: Math.round(next) };
 }
 
-function applyMatchMorale(team: Team, players: Map<string, Player>, won: boolean): void {
-  const delta = won ? MORALE_WIN_DELTA : MORALE_LOSS_DELTA;
-  team.morale = Math.max(0, Math.min(100, team.morale + delta));
+// Returns the combined effective value of a coach stat (head full, assistant half)
+function effectiveCoachStat(
+  team: Team,
+  coaches: Map<string, Coach>,
+  stat: 'tactics' | 'scouting' | 'moraleBoost'
+): number {
+  const head = team.headCoachId ? coaches.get(team.headCoachId) : null;
+  const asst = team.assistantCoachId ? coaches.get(team.assistantCoachId) : null;
+  return (head?.[stat] ?? 0) + (asst?.[stat] ?? 0) * 0.5;
+}
 
-  const playerDelta = won ? PLAYER_WIN_DELTA : PLAYER_LOSS_DELTA;
+function applyMatchMorale(
+  team: Team,
+  players: Map<string, Player>,
+  won: boolean,
+  moraleBoost: number
+): void {
+  const boostFactor = moraleBoost / 99;
+  const teamDelta = won
+    ? MORALE_WIN_DELTA * (1 + boostFactor * 0.5)
+    : MORALE_LOSS_DELTA * (1 - boostFactor * 0.5);
+  team.morale = Math.max(0, Math.min(100, team.morale + teamDelta));
+
+  const playerDelta = won
+    ? PLAYER_WIN_DELTA + Math.round(boostFactor * 3)
+    : PLAYER_LOSS_DELTA + Math.round(boostFactor * 3);
   team.rosterIds.forEach(id => {
     const p = players.get(id);
     if (p) {
@@ -80,9 +101,13 @@ function simWeekMatches(state: GameState): GameState {
     const playersA = getRosterPlayers(state, match.teamAId);
     const playersB = getRosterPlayers(state, match.teamBId);
 
+    const tacticsA = effectiveCoachStat(teamA, state.coaches, 'tactics');
+    const tacticsB = effectiveCoachStat(teamB, state.coaches, 'tactics');
+
     const result = simMatch(
       match.id, teamA, teamB, playersA, playersB,
-      state.roleRatings, match.format, rng
+      state.roleRatings, match.format, rng,
+      { teamAMod: 1.0, teamBMod: 1.0 }, tacticsA, tacticsB
     );
 
     const updated = { ...match, result };
@@ -94,8 +119,8 @@ function simWeekMatches(state: GameState): GameState {
 
     // Morale
     const aWon = result.winner === 'A';
-    applyMatchMorale(teamA, state.players, aWon);
-    applyMatchMorale(teamB, state.players, !aWon);
+    applyMatchMorale(teamA, state.players, aWon, effectiveCoachStat(teamA, state.coaches, 'moraleBoost'));
+    applyMatchMorale(teamB, state.players, !aWon, effectiveCoachStat(teamB, state.coaches, 'moraleBoost'));
 
     // Notify player about their team's match
     if (match.teamAId === state.playerTeamId || match.teamBId === state.playerTeamId) {
@@ -119,6 +144,27 @@ function simWeekMatches(state: GameState): GameState {
 
 // ─── Weekly player tick ───────────────────────────────────────────────────────
 
+function weeklyCoachScoutingTick(state: GameState): GameState {
+  const team = state.teams.get(state.playerTeamId);
+  if (!team) return state;
+
+  const effectiveScouting = effectiveCoachStat(team, state.coaches, 'scouting');
+  if (effectiveScouting <= 0) return state;
+
+  // Confidence gain per week: up to ~1.5 points/week at max combined scouting
+  const confidenceGain = effectiveScouting / 66;
+
+  const allPlayerIds = new Set([...team.rosterIds, ...team.subIds]);
+  state.roleRatings.forEach((rr, key) => {
+    if (!allPlayerIds.has(rr.playerId)) return;
+    if (rr.scoutedRating === null) return;
+    const newConf = Math.min(100, rr.scoutConfidence + confidenceGain);
+    state.roleRatings.set(key, { ...rr, scoutConfidence: Math.round(newConf) });
+  });
+
+  return state;
+}
+
 function weeklyPlayerTick(state: GameState): GameState {
   state.players.forEach((player, id) => {
     const developed = developPlayer(player);
@@ -126,7 +172,7 @@ function weeklyPlayerTick(state: GameState): GameState {
     state.players.set(id, moraleUpdated);
     state.dirtyPlayers.add(id);
   });
-  return state;
+  return weeklyCoachScoutingTick(state);
 }
 
 // ─── Contract expiry notifications ───────────────────────────────────────────
@@ -300,7 +346,9 @@ function simPlayoffStage(state: GameState): GameState {
     const playersB = getRosterPlayers(state, match.teamBId);
     const result = simMatch(
       match.id, teamA, teamB, playersA, playersB,
-      state.roleRatings, match.format, rng, modifiers
+      state.roleRatings, match.format, rng, modifiers,
+      effectiveCoachStat(teamA, state.coaches, 'tactics'),
+      effectiveCoachStat(teamB, state.coaches, 'tactics')
     );
 
     match.result = result;
@@ -523,6 +571,9 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
   const roleRatings = new Map<string, typeof init.roleRatings[0]>();
   init.roleRatings.forEach(rr => roleRatings.set(rr.id, rr));
 
+  const coaches = new Map<string, Coach>();
+  init.coaches.forEach(c => coaches.set(c.id, c));
+
   // Player picks a team from the partnership league
   const playerTeam = teams.get(init.league.teamIds[teamIndex % 12]);
   const playerTeamId = playerTeam?.id ?? init.league.teamIds[0];
@@ -544,12 +595,15 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     matches,
     standings,
     roleRatings,
+    coaches,
     freeAgents: init.players.filter(p => !p.teamId).map(p => p.id),
+    freeAgentCoaches: init.coaches.filter(c => !c.teamId).map(c => c.id),
     pendingDecisions: [],
     notifications: [],
     transferOffers: [],
     playoffBracket: null,
     dirtyPlayers: new Set(),
     dirtyMatches: new Set(),
+    dirtyCoaches: new Set(),
   };
 }
