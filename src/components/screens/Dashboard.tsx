@@ -32,7 +32,7 @@ function TeamMoraleBar({ morale }: { morale: number }) {
     <div>
       <div className="flex justify-between text-xs" style={{ marginBottom: 3 }}>
         <span className="text-dim font-head uppercase">Team Morale</span>
-        <span className="font-mono">{morale}</span>
+        <span className="font-mono">{Math.round(morale)}</span>
       </div>
       <div className="progress-bar">
         <div className="progress-bar-fill" style={{ width: `${morale}%`, background: color }} />
