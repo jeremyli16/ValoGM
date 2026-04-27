@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { GameState, RegionId, Player, CoachRole } from './types';
 import { HOME_NATIONALITIES } from './types';
-import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer } from './engine/gameLoop';
+import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
@@ -12,9 +12,10 @@ import { Standings } from './components/screens/Standings';
 import { Schedule } from './components/screens/Schedule';
 import { Playoffs } from './components/screens/Playoffs';
 import { LeagueHistory } from './components/screens/LeagueHistory';
+import { Finances } from './components/screens/Finances';
 import { Layout } from './components/Layout';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances';
 
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -88,7 +89,7 @@ export function App() {
     }
 
     // Assign new coach
-    gameState.coaches.set(coachId, { ...coach, teamId: gameState.playerTeamId, role });
+    gameState.coaches.set(coachId, { ...coach, teamId: gameState.playerTeamId, role, contractEndSeason: gameState.season + 2 });
     gameState.freeAgentCoaches = gameState.freeAgentCoaches.filter(id => id !== coachId);
     gameState.dirtyCoaches.add(coachId);
 
@@ -124,6 +125,13 @@ export function App() {
     gameState.teams.set(gameState.playerTeamId, updatedTeam);
 
     setGameState({ ...gameState });
+  }, [gameState]);
+
+  const handleSubmitRenewal = useCallback(async (playerId: string, salary: number, length: number) => {
+    if (!gameState) return;
+    const next = submitRenewalOffer(gameState, playerId, salary, length);
+    setGameState({ ...next });
+    await persistGameState(next);
   }, [gameState]);
 
   const handleAdvanceWeek = useCallback(async () => {
@@ -179,6 +187,7 @@ export function App() {
         {nav === 'schedule'   && <Schedule   state={gameState} />}
         {nav === 'playoffs'   && <Playoffs      state={gameState} />}
         {nav === 'history'    && <LeagueHistory state={gameState} />}
+        {nav === 'finances'   && <Finances state={gameState} onSubmitRenewal={handleSubmitRenewal} />}
       </Layout>
 
       {importViolators.length > 0 && (

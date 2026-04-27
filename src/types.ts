@@ -69,6 +69,7 @@ export interface Coach {
   moraleBoost: number;  // 0-99: increases win morale gain, reduces loss morale loss
   teamId: string | null;
   role: CoachRole | null;
+  contractEndSeason: number | null;
 }
 
 // ─── Organization & Team ────────────────────────────────────────────────────

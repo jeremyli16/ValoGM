@@ -36,6 +36,7 @@ export function generateCoach(id: string, rng: SeededRng, regionId: RegionId): C
     moraleBoost,
     teamId: null,
     role: null,
+    contractEndSeason: null,
   };
 }
 

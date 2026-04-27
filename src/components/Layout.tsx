@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances';
 
 interface Props {
   state: GameState;
@@ -15,6 +15,7 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
   { id: 'dashboard',  label: 'Dashboard' },
   { id: 'roster',     label: 'Roster' },
   { id: 'transfers',  label: 'Market' },
+  { id: 'finances',   label: 'Finances' },
   { id: 'matchday',   label: 'Matches' },
   { id: 'standings',  label: 'Standings' },
   { id: 'schedule',   label: 'Schedule' },
@@ -35,6 +36,7 @@ function phaseTag(state: GameState) {
 
 export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props) {
   const unread = state.notifications.filter(n => !n.read).length;
+  const pendingRenewals = state.pendingDecisions.filter(d => d.type === 'contract_renewal').length;
   const team = state.teams.get(state.playerTeamId);
 
   return (
@@ -99,6 +101,13 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
                     fontFamily: 'var(--font-mono)', fontSize: 10,
                     padding: '1px 5px', borderRadius: 10,
                   }}>{unread}</span>
+                )}
+                {item.id === 'finances' && pendingRenewals > 0 && (
+                  <span style={{
+                    background: 'var(--amber)', color: '#000',
+                    fontFamily: 'var(--font-mono)', fontSize: 10,
+                    padding: '1px 5px', borderRadius: 10,
+                  }}>{pendingRenewals}</span>
                 )}
               </div>
             );
