@@ -1,4 +1,4 @@
-import { getDb, type SerializedGameState } from './schema';
+import { getDb, type SerializedGameState, type ValoGMSchema } from './schema';
 import type {
   Player, PlayerRoleRatingRecord, Team, Organization, League,
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
@@ -291,6 +291,15 @@ export async function persistGameState(state: GameState): Promise<void> {
 }
 
 export async function initNewGameDb(state: GameState): Promise<void> {
+  // Clear all stores so no data from previous games bleeds into the new one.
+  const db = await getDb();
+  const storeNames: (keyof ValoGMSchema)[] = [
+    'players', 'playerRoleRatings', 'teams', 'orgs', 'leagues',
+    'contracts', 'matches', 'standings', 'transferOffers',
+    'notifications', 'playerMatchStats', 'coaches', 'gameState',
+  ];
+  await Promise.all(storeNames.map(name => db.clear(name as any)));
+
   const players: Player[] = [];
   const roleRatings: PlayerRoleRatingRecord[] = [];
   const teams: Team[] = [];
