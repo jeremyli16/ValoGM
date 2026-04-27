@@ -1,8 +1,57 @@
 import { useState, useMemo } from 'react';
-import type { GameState, Player, PlayerRole, Coach, CoachRole, TransferOffer } from '../../types';
+import type { GameState, Player, PlayerRole, Coach, CoachRole, TransferOffer, PlayerRoleRatingRecord } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
-import { computeBuyout } from '../../engine/gameLoop';
+import { computeBuyout, effectiveCoachStat } from '../../engine/gameLoop';
+
+// ─── Scouting helpers ─────────────────────────────────────────────────────────
+
+const ROLE_COLORS: Record<PlayerRole, string> = {
+  duelist:    'var(--role-duelist)',
+  initiator:  'var(--role-initiator)',
+  controller: 'var(--role-controller)',
+  sentinel:   'var(--role-sentinel)',
+};
+
+const ROLES: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
+
+interface DisplayRoleRating {
+  role: PlayerRole;
+  rating: number;
+  confidence: number;
+}
+
+// Deterministic [-1, 1] noise so the displayed rating is stable across renders
+function deterministicNoise(playerId: string, role: string): number {
+  const key = `${playerId}:${role}`;
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+  }
+  return ((h >>> 0) / 0x100000000) * 2 - 1;
+}
+
+// Returns a display rating for a non-roster player.
+// If the player was previously on the team their stored scoutedRating is used;
+// otherwise a noisy estimate is derived from the coach's effective scouting.
+function getDisplayRoleRating(
+  rr: PlayerRoleRatingRecord,
+  effectiveScouting: number,
+): DisplayRoleRating {
+  if (rr.scoutedRating !== null) {
+    return { role: rr.role, rating: rr.scoutedRating, confidence: rr.scoutConfidence };
+  }
+  // Never on team — apply scouting-scaled noise to trueRating.
+  // noiseRange: 5 (max scouting) → 40 (no scouting)
+  const noiseRange = 40 - (effectiveScouting / 99) * 35;
+  const raw = rr.trueRating + deterministicNoise(rr.playerId, rr.role) * noiseRange;
+  const rating = Math.round(Math.max(0, Math.min(100, raw)));
+  // confidence: 5% (no scouting) → 45% (max scouting)
+  const confidence = Math.round(5 + (effectiveScouting / 99) * 40);
+  return { role: rr.role, rating, confidence };
+}
+
+// ─── Component interfaces ─────────────────────────────────────────────────────
 
 interface Props {
   state: GameState;
@@ -26,8 +75,9 @@ function acceptanceLikelihood(
   return Math.round(Math.max(5, Math.min(95, salaryScore + prestigeScore)));
 }
 
-function PlayerCard({ player, onOffer, showOffer }: {
+function PlayerCard({ player, roleRatings, onOffer, showOffer }: {
   player: Player;
+  roleRatings: DisplayRoleRating[];
   onOffer: (p: Player) => void;
   showOffer: boolean;
 }) {
@@ -64,6 +114,40 @@ function PlayerCard({ player, onOffer, showOffer }: {
           <StatBar label="CLUTCH" value={player.clutch} color="var(--amber)" />
         </div>
       </div>
+
+      {roleRatings.length > 0 && (
+        <div style={{ marginTop: 8, borderTop: '1px solid var(--border-dim)', paddingTop: 6 }}>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 4 }}>
+            ROLE RATINGS
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
+            {roleRatings.map(({ role, rating, confidence }) => {
+              const isPrimary = role === player.primaryRole;
+              const color = ROLE_COLORS[role];
+              return (
+                <div key={role}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-head)', color: isPrimary ? color : 'var(--text-dim)', letterSpacing: '0.04em' }}>
+                      {role.slice(0, 3).toUpperCase()}{isPrimary ? ' ★' : ''}
+                    </span>
+                    <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: isPrimary ? color : 'var(--text-secondary)' }}>
+                      {rating} <span className="text-dim" style={{ fontSize: 8 }}>{confidence}%</span>
+                    </span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-bar-fill" style={{
+                      width: `${rating}%`,
+                      background: color,
+                      opacity: 0.25 + (confidence / 100) * 0.75,
+                    }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {player.teamId && (
         <div className="text-dim text-xs" style={{ marginTop: 4 }}>
           Under contract — transfer fee required
@@ -278,6 +362,12 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer }:
   const [coachSearch, setCoachSearch] = useState('');
   const [hireTarget, setHireTarget] = useState<Coach | null>(null);
 
+  const effectiveScouting = useMemo(() => {
+    const team = state.teams.get(state.playerTeamId);
+    if (!team) return 0;
+    return effectiveCoachStat(team, state.coaches, 'scouting');
+  }, [state]);
+
   const allPlayers = useMemo(() => {
     const out: Player[] = [];
     state.players.forEach(p => {
@@ -422,14 +512,21 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer }:
           )}
 
           <div className="scroll-area flex-col gap-2" style={{ flex: 1 }}>
-            {filtered.map(p => (
-              <PlayerCard
-                key={p.id}
-                player={p}
-                onOffer={setOfferTarget}
-                showOffer={!pendingOfferPlayerIds.has(p.id)}
-              />
-            ))}
+            {filtered.map(p => {
+              const roleRatings = ROLES
+                .map(role => state.roleRatings.get(`${p.id}:${role}`))
+                .filter((rr): rr is PlayerRoleRatingRecord => !!rr)
+                .map(rr => getDisplayRoleRating(rr, effectiveScouting));
+              return (
+                <PlayerCard
+                  key={p.id}
+                  player={p}
+                  roleRatings={roleRatings}
+                  onOffer={setOfferTarget}
+                  showOffer={!pendingOfferPlayerIds.has(p.id)}
+                />
+              );
+            })}
             {filtered.length === 0 && (
               <div className="text-dim text-sm" style={{ padding: 20 }}>No players match your filters.</div>
             )}

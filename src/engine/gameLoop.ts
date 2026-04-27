@@ -27,7 +27,7 @@ function updateMorale(player: Player): Player {
 }
 
 // Returns the combined effective value of a coach stat (head full, assistant half)
-function effectiveCoachStat(
+export function effectiveCoachStat(
   team: Team,
   coaches: Map<string, Coach>,
   stat: 'tactics' | 'scouting' | 'moraleBoost'
@@ -145,22 +145,40 @@ function simWeekMatches(state: GameState): GameState {
 
 // ─── Weekly player tick ───────────────────────────────────────────────────────
 
+// Deterministic [-1, 1] noise from a string key — used for stable initial scouted estimates
+function stableNoise(key: string): number {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) {
+    h = (Math.imul(31, h) + key.charCodeAt(i)) | 0;
+  }
+  return ((h >>> 0) / 0x100000000) * 2 - 1;
+}
+
 function weeklyCoachScoutingTick(state: GameState): GameState {
   const team = state.teams.get(state.playerTeamId);
   if (!team) return state;
 
   const effectiveScouting = effectiveCoachStat(team, state.coaches, 'scouting');
-  if (effectiveScouting <= 0) return state;
 
-  // Confidence gain per week: up to ~1.5 points/week at max combined scouting
+  // Confidence gain per week: up to ~1.5 pts/week at max combined scouting
   const confidenceGain = effectiveScouting / 66;
 
   const allPlayerIds = new Set([...team.rosterIds, ...team.subIds]);
   state.roleRatings.forEach((rr, key) => {
     if (!allPlayerIds.has(rr.playerId)) return;
-    if (rr.scoutedRating === null) return;
-    const newConf = Math.min(100, rr.scoutConfidence + confidenceGain);
-    state.roleRatings.set(key, { ...rr, scoutConfidence: Math.round(newConf) });
+    if (rr.scoutedRating === null) {
+      // First exposure — initialize with noise inversely proportional to scouting quality.
+      // Higher scouting = tighter initial estimate (noiseRange 5–30).
+      const noiseRange = 30 - (effectiveScouting / 99) * 25;
+      const scoutedRating = Math.round(
+        Math.max(0, Math.min(100, rr.trueRating + stableNoise(key) * noiseRange))
+      );
+      const initConf = Math.round(5 + (effectiveScouting / 99) * 20); // 5–25%
+      state.roleRatings.set(key, { ...rr, scoutedRating, scoutConfidence: initConf });
+    } else {
+      const newConf = Math.min(100, rr.scoutConfidence + confidenceGain);
+      state.roleRatings.set(key, { ...rr, scoutConfidence: Math.round(newConf) });
+    }
   });
 
   return state;
