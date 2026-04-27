@@ -23,10 +23,12 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
 ];
 
 function phaseTag(state: GameState) {
+  const calSeason = Math.ceil(state.season / 3);
+  const splitNum  = ((state.season - 1) % 3) + 1;
   const p = state.phase;
-  if (p === 'regular_season') return `Season ${state.season} — Split ${state.act} — Week ${state.week}`;
-  if (p === 'playoffs') return `Season ${state.season} — Playoffs`;
-  if (p === 'offseason') return `Offseason — Week ${state.week}`;
+  if (p === 'regular_season') return `Season ${calSeason} — Split ${splitNum} — Week ${state.week}`;
+  if (p === 'playoffs') return `Season ${calSeason} — Split ${splitNum} — Playoffs`;
+  if (p === 'offseason') return `Offseason`;
   if (p === 'preseason') return 'Preseason';
   return '';
 }

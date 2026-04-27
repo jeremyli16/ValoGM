@@ -168,7 +168,7 @@ function SeasonBlock({
             SEASON AWARDS
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <AwardCard label="SEASON MVP"       playerId={record.mvpPlayerId}       state={state} accent="var(--red)" />
+            <AwardCard label="SEASON MVP"       playerId={record.mvpPlayerId}       state={state} accent="var(--amber)" />
             <AwardCard label="BEST DUELIST"     playerId={record.bestDuelistId}     state={state} />
             <AwardCard label="BEST INITIATOR"   playerId={record.bestInitiatorId}   state={state} />
             <AwardCard label="BEST CONTROLLER"  playerId={record.bestControllerId}  state={state} />
@@ -229,7 +229,7 @@ export function LeagueHistory({ state }: { state: GameState }) {
       </div>
       {sortedSeasons.map(season => {
         const record = seasonHistory.find(r => r.season === season) ?? null;
-        const splits = (splitsBySeason.get(season) ?? []).sort((a, b) => a.splitNum - b.splitNum);
+        const splits = (splitsBySeason.get(season) ?? []).sort((a, b) => b.splitNum - a.splitNum);
         return (
           <SeasonBlock
             key={season}
