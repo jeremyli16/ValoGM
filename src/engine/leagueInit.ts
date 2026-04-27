@@ -183,15 +183,17 @@ function assignRoster(
     p.teamId = team.id;
     const contractId = `c${p.id}`;
     p.contractId = contractId;
+    const calYears = randInt(rng, 1, 3); // 1–3 calendar years
+    const calYear = Math.ceil(season / 3);
     contracts.set(contractId, {
       id: contractId,
       playerId: p.id,
       teamId: team.id,
       salary: p.salary,
-      length: randInt(rng, 1, 3),
+      length: calYears,
       buyout: Math.round(p.salary * randFloat(rng, 1.5, 3.0)),
       startSeason: season,
-      endSeason: season + randInt(rng, 1, 3),
+      endSeason: (calYear + calYears - 1) * 3,
     });
   });
 
@@ -512,14 +514,14 @@ export function initLeague(regionId: RegionId, seed: number, rng: SeededRng): Le
     const head = allCoaches[coachIdx++];
     head.teamId = team.id;
     head.role = 'head';
-    head.contractEndSeason = 1 + randInt(rng, 1, 3);
+    head.contractEndSeason = (1 + randInt(rng, 0, 2)) * 3;
     team.headCoachId = head.id;
 
     if (rank < 8) {
       const asst = allCoaches[coachIdx++];
       asst.teamId = team.id;
       asst.role = 'assistant';
-      asst.contractEndSeason = 1 + randInt(rng, 1, 3);
+      asst.contractEndSeason = (1 + randInt(rng, 0, 2)) * 3;
       team.assistantCoachId = asst.id;
     }
   });
@@ -529,7 +531,7 @@ export function initLeague(regionId: RegionId, seed: number, rng: SeededRng): Le
     const head = allCoaches[coachIdx++];
     head.teamId = team.id;
     head.role = 'head';
-    head.contractEndSeason = 1 + randInt(rng, 1, 3);
+    head.contractEndSeason = (1 + randInt(rng, 0, 2)) * 3;
     team.headCoachId = head.id;
   });
 

@@ -70,6 +70,8 @@ export function Dashboard({ state }: Props) {
   const position = getStandingsPosition(state);
   const recentNotifs = state.notifications.slice(-8).reverse();
 
+  const standingsRow = state.standings.get(`${state.leagueId}:${state.season}:${state.playerTeamId}`);
+
   const rosterPlayers = (team?.rosterIds ?? []).map(id => state.players.get(id)).filter(Boolean);
   const benchPlayers = (team?.subIds ?? []).map(id => state.players.get(id)).filter(Boolean);
   const payroll =
@@ -85,8 +87,8 @@ export function Dashboard({ state }: Props) {
           <div className="flex items-center gap-2">
             <span className="font-mono text-red" style={{ fontSize: 32 }}>#{position}</span>
             <div>
-              <div className="font-head" style={{ fontSize: 13 }}>{team?.wins ?? 0}W — {team?.losses ?? 0}L</div>
-              <div className="text-dim text-xs">{team?.points ?? 0} pts</div>
+              <div className="font-head" style={{ fontSize: 13 }}>{standingsRow?.wins ?? 0}W — {standingsRow?.losses ?? 0}L</div>
+              <div className="text-dim text-xs">{standingsRow?.points ?? 0} pts</div>
             </div>
           </div>
         </div>

@@ -197,6 +197,10 @@ function weeklyPlayerTick(state: GameState): GameState {
 // ─── Contract expiry notifications ───────────────────────────────────────────
 
 function checkContractExpiry(state: GameState): GameState {
+  // Only warn in week 1 of the final split of a calendar year (season % 3 === 0)
+  // so players get advance notice that their contract expires this offseason.
+  if (state.season % 3 !== 0 || state.week !== 1) return state;
+
   const playerTeam = state.teams.get(state.playerTeamId);
   if (!playerTeam) return state;
 
@@ -204,20 +208,17 @@ function checkContractExpiry(state: GameState): GameState {
     const player = state.players.get(playerId);
     if (!player?.contractId) return;
     const contract = state.contracts.get(player.contractId);
-    if (!contract) return;
+    if (!contract || contract.endSeason !== state.season) return;
 
-    const weeksLeft = (contract.endSeason - state.season) * 24 + (24 - state.week);
-    if (weeksLeft === 4) {
-      state.notifications.push({
-        id: notifId(),
-        type: 'contract_expiring',
-        title: 'Contract Expiring Soon',
-        body: `${player.alias}'s contract expires in 4 weeks.`,
-        week: state.week,
-        read: false,
-        data: { playerId },
-      });
-    }
+    state.notifications.push({
+      id: notifId(),
+      type: 'contract_expiring',
+      title: 'Contract Expiring This Split',
+      body: `${player.alias}'s contract expires at the end of this calendar year.`,
+      week: state.week,
+      read: false,
+      data: { playerId },
+    });
   });
   return state;
 }
@@ -584,7 +585,7 @@ export function autoFillRoster(state: GameState): GameState {
         length: 1,
         buyout: Math.round(p.salary * 2),
         startSeason: state.season,
-        endSeason: state.season,
+        endSeason: Math.ceil(state.season / 3) * 3,
       });
       state.notifications.push({
         id: notifId(),
@@ -637,7 +638,7 @@ export function computeBuyout(
   team: Team,
   season: number,
 ): number {
-  const yearsLeft = Math.max(1, contract.endSeason - season + 1);
+  const yearsLeft = Math.max(1, contract.endSeason / 3 - Math.ceil(season / 3) + 1);
   // Skill multiplier 0.75–1.5 based on aim+gameSense
   const skillMod = 0.75 + (player.aim + player.gameSense) / 200 * 0.75;
   // Bench discount: benched players cost less to buy out
@@ -722,7 +723,7 @@ function executeTransfer(offer: TransferOffer, player: Player, state: GameState)
     length: offer.contractLength,
     buyout: Math.round(offer.offeredSalary * 2),
     startSeason: state.season,
-    endSeason: state.season + offer.contractLength - 1,
+    endSeason: (Math.ceil(state.season / 3) + offer.contractLength - 1) * 3,
   });
 
   // Add to new team's bench (fresh signings always start on bench)
@@ -802,6 +803,8 @@ let _renewalSeq = 0;
 
 // Week 1 of offseason: push Decisions for all expired player-team contracts.
 function detectExpiringContracts(state: GameState): GameState {
+  // Contracts only expire at end of calendar years (every 3rd split).
+  if (state.season % 3 !== 0) return state;
   const team = state.teams.get(state.playerTeamId);
   if (!team) return state;
 
@@ -912,7 +915,7 @@ function processRenewalOffers(state: GameState): GameState {
         length,
         buyout: Math.round(offered * length * 0.75),
         startSeason: state.season + 1,
-        endSeason: state.season + length,
+        endSeason: (Math.ceil(state.season / 3) + length) * 3,
       });
       state.players.set(playerId, { ...player, contractId });
       state.dirtyPlayers.add(playerId);

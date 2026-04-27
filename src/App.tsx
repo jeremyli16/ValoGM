@@ -89,7 +89,7 @@ export function App() {
     }
 
     // Assign new coach
-    gameState.coaches.set(coachId, { ...coach, teamId: gameState.playerTeamId, role, contractEndSeason: gameState.season + 2 });
+    gameState.coaches.set(coachId, { ...coach, teamId: gameState.playerTeamId, role, contractEndSeason: (Math.ceil(gameState.season / 3) + 1) * 3 });
     gameState.freeAgentCoaches = gameState.freeAgentCoaches.filter(id => id !== coachId);
     gameState.dirtyCoaches.add(coachId);
 

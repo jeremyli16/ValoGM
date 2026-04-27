@@ -10,9 +10,14 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function contractStatus(contract: Contract, season: number): 'expired' | 'expiring' | 'active' {
-  if (contract.endSeason <= season) return 'expired';
-  if (contract.endSeason === season + 1) return 'expiring';
+function calYearsLeft(endSeason: number, season: number): number {
+  return endSeason / 3 - Math.ceil(season / 3) + 1;
+}
+
+function contractStatus(endSeason: number, season: number): 'expired' | 'expiring' | 'active' {
+  const yrs = calYearsLeft(endSeason, season);
+  if (yrs <= 0) return 'expired';
+  if (yrs === 1) return 'expiring';
   return 'active';
 }
 
@@ -148,8 +153,8 @@ function ContractRow({ player, contract, season, isBench }: {
   season: number;
   isBench: boolean;
 }) {
-  const status = contractStatus(contract, season);
-  const yearsLeft = contract.endSeason - season;
+  const status = contractStatus(contract.endSeason, season);
+  const yearsLeft = calYearsLeft(contract.endSeason, season);
   const effectiveSalary = isBench ? contract.salary * BENCH_SALARY_FACTOR : contract.salary;
 
   return (
@@ -368,8 +373,8 @@ export function Finances({ state, onSubmitRenewal }: Props) {
             <tbody>
               {headCoach && (() => {
                 const end = headCoach.contractEndSeason;
-                const status = end == null ? null : contractStatus({ endSeason: end } as never, state.season);
-                const yearsLeft = end != null ? end - state.season : null;
+                const status = end != null ? contractStatus(end, state.season) : null;
+                const yearsLeft = end != null ? calYearsLeft(end, state.season) : null;
                 return (
                   <tr>
                     <td style={{ fontWeight: 600 }}>{headCoach.firstName} {headCoach.lastName}</td>
@@ -382,8 +387,8 @@ export function Finances({ state, onSubmitRenewal }: Props) {
               })()}
               {asstCoach && (() => {
                 const end = asstCoach.contractEndSeason;
-                const status = end == null ? null : contractStatus({ endSeason: end } as never, state.season);
-                const yearsLeft = end != null ? end - state.season : null;
+                const status = end != null ? contractStatus(end, state.season) : null;
+                const yearsLeft = end != null ? calYearsLeft(end, state.season) : null;
                 return (
                   <tr>
                     <td style={{ fontWeight: 600 }}>{asstCoach.firstName} {asstCoach.lastName}</td>
