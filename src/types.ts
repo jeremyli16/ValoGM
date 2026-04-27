@@ -369,7 +369,7 @@ export const LEAGUE_FORMATS: Record<LeagueTier, LeagueFormat> = {
     teamsPerLeague: 12,
     playoffTeams: 8,
     playoffBye: 2,
-    regularSeasonWeeks: 8,
+    regularSeasonWeeks: 5,
     regularSeason: 'bo3',
   },
   challengers: {

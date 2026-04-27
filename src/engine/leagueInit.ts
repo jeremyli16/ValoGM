@@ -209,37 +209,46 @@ export function generateSchedule(
   const { groups, format } = league;
   if (!groups) return matches;
 
-  const groups_ = [groups.groupA, groups.groupB];
   let matchIdCounter = 0;
 
-  for (const group of groups_) {
-    // Round-robin within group over 3 acts (8 weeks)
-    const pairs: [string, string][] = [];
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        pairs.push([group[i], group[j]]);
-      }
-    }
+  for (const group of [groups.groupA, groups.groupB]) {
+    // Shuffle group order so matchups vary across seasons
+    const teams = shuffle(rng, [...group]);
+    const n = teams.length; // 6
 
-    const shuffled = shuffle(rng, pairs);
-    const totalWeeks = format.regularSeasonWeeks;
-    shuffled.forEach((pair, idx) => {
-      const week = (idx % totalWeeks) + 1;
-      const act = week <= 3 ? 1 : week <= 6 ? 2 : 3;
-      matches.push({
-        id: `m${season}_${league.id}_${matchIdCounter++}`,
-        leagueId: league.id,
-        season,
-        act,
-        week,
-        teamAId: pair[0],
-        teamBId: pair[1],
-        format: format.regularSeason,
-        result: null,
-        isPlayoff: false,
-        playoffRound: null,
-      });
-    });
+    // Round-robin via polygon rotation: fix teams[0], rotate teams[1..n-1].
+    // Produces n-1 rounds where each team plays exactly once per round.
+    const rotatable = teams.slice(1);
+
+    for (let round = 0; round < n - 1; round++) {
+      const week = round + 1;
+      const act = week <= 2 ? 1 : week <= 4 ? 2 : 3;
+
+      // Pair fixed team with last of rotatable, then pair remaining inward
+      const roundPairs: [string, string][] = [[teams[0], rotatable[n - 2]]];
+      for (let i = 0; i < Math.floor((n - 1) / 2); i++) {
+        roundPairs.push([rotatable[i], rotatable[n - 2 - i - 1]]);
+      }
+
+      for (const [a, b] of roundPairs) {
+        matches.push({
+          id: `m${season}_${league.id}_${matchIdCounter++}`,
+          leagueId: league.id,
+          season,
+          act,
+          week,
+          teamAId: a,
+          teamBId: b,
+          format: format.regularSeason,
+          result: null,
+          isPlayoff: false,
+          playoffRound: null,
+        });
+      }
+
+      // Rotate: move last element to front
+      rotatable.unshift(rotatable.pop()!);
+    }
   }
 
   return matches;

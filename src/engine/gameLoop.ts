@@ -448,16 +448,28 @@ function checkPhaseTransition(state: GameState): GameState {
 
 // ─── Playoff simulation ───────────────────────────────────────────────────────
 
+// Rounds to simulate each playoff week, in play order.
+const PLAYOFF_WEEK_ROUNDS: Record<number, string[]> = {
+  1: ['UR1A', 'UR1B'],
+  2: ['LR1A', 'LR1B'],
+  3: ['USF1', 'USF2'],
+  4: ['LR2A', 'LR2B'],
+  5: ['UF', 'LR3'],
+  6: ['LF'],
+  7: ['GF'],
+};
+
 function simPlayoffStage(state: GameState): GameState {
   if (!state.playoffBracket) return state;
   const rng = createRng(state.seed + state.season * 1000 + state.week + 10000);
 
   const bracket = state.playoffBracket;
-  const ORDER = ['UR1A', 'UR1B', 'LR1A', 'LR1B', 'USF1', 'USF2', 'LR2A', 'LR2B', 'UF', 'LR3', 'LF', 'GF'];
+  const roundsThisWeek = PLAYOFF_WEEK_ROUNDS[state.week] ?? [];
 
-  for (const round of ORDER) {
-    const match = bracket.matches.find(m => m.round === round && !m.result);
-    if (!match || !match.teamAId || !match.teamBId) continue;
+  for (const round of roundsThisWeek) {
+    const match = bracket.matches.find(m => m.round === round);
+    if (!match || match.result) continue;
+    if (!match.teamAId || !match.teamBId) continue;
 
     const teamA = state.teams.get(match.teamAId);
     const teamB = state.teams.get(match.teamBId);
@@ -465,12 +477,10 @@ function simPlayoffStage(state: GameState): GameState {
 
     let modifiers = { teamAMod: 1.0, teamBMod: 1.0 };
 
-    // Grand final fatigue
     if (match.round === 'GF') {
       const lf = bracket.matches.find(m => m.round === 'LF');
       if (lf?.result) {
         const { upperMod, lowerMod } = getGrandFinalFatigueMod(lf);
-        // LF winner is teamBId of GF (lower bracket finalist)
         modifiers = { teamAMod: upperMod, teamBMod: lowerMod };
       }
     }
@@ -486,7 +496,6 @@ function simPlayoffStage(state: GameState): GameState {
 
     match.result = result;
 
-    // Feed results forward
     if (match.feedsWinnerTo) {
       const next = bracket.matches.find(m => m.id === match.feedsWinnerTo);
       if (next) {
@@ -503,13 +512,9 @@ function simPlayoffStage(state: GameState): GameState {
       }
     }
 
-    // Check champion
     if (match.round === 'GF') {
       bracket.champion = result.winner === 'A' ? match.teamAId! : match.teamBId!;
     }
-
-    // Only sim one stage per week advance
-    break;
   }
 
   state.playoffBracket = bracket;
