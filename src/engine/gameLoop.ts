@@ -1,7 +1,7 @@
 import type {
   GameState, ScheduledMatch, Player, Team, Notification,
   StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole, Coach,
-  Contract, TransferOffer, TransferStatus,
+  Contract, TransferOffer, TransferStatus, SplitRecord, SeasonRecord,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -204,6 +204,99 @@ function checkContractExpiry(state: GameState): GameState {
   return state;
 }
 
+// ─── League history builders ──────────────────────────────────────────────────
+// One split = one complete game-season (regular season + playoffs).
+// Three splits = one calendar season shown in History.
+
+function aggregatePlayerRatings(
+  regularMatches: ScheduledMatch[],
+  playoffMatches: PlayoffMatch[],
+): Map<string, { total: number; games: number }> {
+  const totals = new Map<string, { total: number; games: number }>();
+  for (const m of regularMatches) {
+    if (!m.result) continue;
+    for (const ps of m.result.playerStats) {
+      const curr = totals.get(ps.playerId) ?? { total: 0, games: 0 };
+      totals.set(ps.playerId, { total: curr.total + ps.rating, games: curr.games + 1 });
+    }
+  }
+  for (const m of playoffMatches) {
+    if (!m.result) continue;
+    for (const ps of m.result.playerStats) {
+      const curr = totals.get(ps.playerId) ?? { total: 0, games: 0 };
+      totals.set(ps.playerId, { total: curr.total + ps.rating, games: curr.games + 1 });
+    }
+  }
+  return totals;
+}
+
+function buildSplitRecord(state: GameState, gameSeason: number): SplitRecord | null {
+  const calendarSeason = Math.ceil(gameSeason / 3);
+  const splitNum = ((gameSeason - 1) % 3) + 1;
+
+  const winnerTeamId = state.playoffBracket?.champion ?? '';
+  const gfMatch = state.playoffBracket?.matches.find(m => m.round === 'GF');
+  const runnerUpTeamId = gfMatch?.result
+    ? (gfMatch.result.winner === 'A' ? gfMatch.teamBId ?? '' : gfMatch.teamAId ?? '')
+    : '';
+
+  const regularMatches = [...state.matches.values()].filter(
+    m => m.leagueId === state.leagueId && m.season === gameSeason && !!m.result,
+  );
+  const playoffMatches = (state.playoffBracket?.matches ?? []).filter(m => m.result !== null);
+  const playerTotals = aggregatePlayerRatings(regularMatches, playoffMatches);
+
+  let mvpPlayerId = '';
+  let bestRating = -Infinity;
+  playerTotals.forEach((v, id) => {
+    const avg = v.total / v.games;
+    if (avg > bestRating) { bestRating = avg; mvpPlayerId = id; }
+  });
+
+  if (!winnerTeamId && !mvpPlayerId) return null;
+  return { calendarSeason, splitNum, winnerTeamId, runnerUpTeamId, mvpPlayerId };
+}
+
+// Season record is only captured at the end of every 3rd game-season.
+// Awards are derived from the final split's data (the only season still in memory).
+function buildSeasonRecord(state: GameState, gameSeason: number): SeasonRecord | null {
+  if (gameSeason % 3 !== 0) return null;
+  const calendarSeason = Math.ceil(gameSeason / 3);
+
+  const regularMatches = [...state.matches.values()].filter(
+    m => m.leagueId === state.leagueId && m.season === gameSeason && !!m.result,
+  );
+  const playoffMatches = (state.playoffBracket?.matches ?? []).filter(m => m.result !== null);
+  const playerTotals = aggregatePlayerRatings(regularMatches, playoffMatches);
+  if (playerTotals.size === 0) return null;
+
+  let mvpPlayerId = '';
+  let bestRating = -Infinity;
+  const bestByRole: Record<string, { playerId: string; rating: number }> = {
+    duelist:    { playerId: '', rating: -Infinity },
+    initiator:  { playerId: '', rating: -Infinity },
+    controller: { playerId: '', rating: -Infinity },
+    sentinel:   { playerId: '', rating: -Infinity },
+  };
+
+  playerTotals.forEach((v, playerId) => {
+    const avg = v.total / v.games;
+    if (avg > bestRating) { bestRating = avg; mvpPlayerId = playerId; }
+    const role = state.players.get(playerId)?.primaryRole;
+    if (role && avg > bestByRole[role].rating) bestByRole[role] = { playerId, rating: avg };
+  });
+
+  return {
+    season: calendarSeason,
+    championTeamId: state.playoffBracket?.champion ?? '',
+    mvpPlayerId,
+    bestDuelistId:    bestByRole.duelist.playerId,
+    bestInitiatorId:  bestByRole.initiator.playerId,
+    bestControllerId: bestByRole.controller.playerId,
+    bestSentinelId:   bestByRole.sentinel.playerId,
+  };
+}
+
 // ─── Phase transitions ────────────────────────────────────────────────────────
 
 function checkPhaseTransition(state: GameState): GameState {
@@ -251,6 +344,12 @@ function checkPhaseTransition(state: GameState): GameState {
       read: false,
     });
   } else if (state.phase === 'playoffs' && state.playoffBracket?.champion) {
+    // Capture split record (one per game-season) and season record (every 3rd game-season)
+    const splitRec = buildSplitRecord(state, state.season);
+    if (splitRec) state.splitHistory = [...state.splitHistory, splitRec];
+    const seasonRec = buildSeasonRecord(state, state.season);
+    if (seasonRec) state.seasonHistory = [...state.seasonHistory, seasonRec];
+
     state.phase = 'offseason';
     state.week = 1;
     state.notifications.push({
@@ -801,6 +900,8 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     coaches,
     freeAgents: init.players.filter(p => !p.teamId).map(p => p.id),
     freeAgentCoaches: init.coaches.filter(c => !c.teamId).map(c => c.id),
+    splitHistory: [],
+    seasonHistory: [],
     pendingDecisions: [],
     notifications: [],
     transferOffers: [],

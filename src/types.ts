@@ -265,6 +265,29 @@ export interface Decision {
   data: Record<string, string | number | boolean>;
 }
 
+// ─── League History ───────────────────────────────────────────────────────────
+
+// calendarSeason groups every 3 game-seasons (1 = game-seasons 1-3, 2 = 4-6, …)
+// splitNum is 1, 2, or 3 within that calendar season
+export interface SplitRecord {
+  calendarSeason: number;
+  splitNum: number;
+  winnerTeamId: string;
+  runnerUpTeamId: string;
+  mvpPlayerId: string;
+}
+
+// Captured at the end of every 3rd game-season (splitNum === 3)
+export interface SeasonRecord {
+  season: number;          // calendar season number (1, 2, 3 …)
+  championTeamId: string;  // winner of the final (3rd) split
+  mvpPlayerId: string;
+  bestDuelistId: string;
+  bestInitiatorId: string;
+  bestControllerId: string;
+  bestSentinelId: string;
+}
+
 // ─── Game State ──────────────────────────────────────────────────────────────
 
 export interface GameState {
@@ -293,6 +316,9 @@ export interface GameState {
   notifications: Notification[];
   transferOffers: TransferOffer[];
   playoffBracket: PlayoffBracket | null;
+
+  splitHistory: SplitRecord[];
+  seasonHistory: SeasonRecord[];
 
   dirtyPlayers: Set<string>;
   dirtyMatches: Set<string>;

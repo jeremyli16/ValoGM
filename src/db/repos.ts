@@ -234,6 +234,8 @@ export async function persistGameState(state: GameState): Promise<void> {
     seed: state.seed,
     freeAgents: state.freeAgents,
     freeAgentCoaches: state.freeAgentCoaches,
+    splitHistory: state.splitHistory,
+    seasonHistory: state.seasonHistory,
   });
 
   // 2. Dirty players
@@ -365,6 +367,8 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     standings: standingsMap,
     coaches: coachMap,
     freeAgentCoaches: saved.freeAgentCoaches ?? [],
+    splitHistory: saved.splitHistory ?? [],
+    seasonHistory: saved.seasonHistory ?? [],
     transferOffers: offersArr,
     pendingDecisions: [],
     notifications: [],

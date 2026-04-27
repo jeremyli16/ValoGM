@@ -3,6 +3,7 @@ import type {
   Player, PlayerRoleRatingRecord, Team, Organization, League,
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
   Notification, PlayerMatchStat, GameState, Coach,
+  SplitRecord, SeasonRecord,
 } from '../types';
 
 export interface ValoGMSchema extends DBSchema {
@@ -95,6 +96,8 @@ export interface SerializedGameState {
   seed: number;
   freeAgents: string[];
   freeAgentCoaches: string[];
+  splitHistory?: SplitRecord[];
+  seasonHistory?: SeasonRecord[];
 }
 
 let _db: IDBPDatabase<ValoGMSchema> | null = null;

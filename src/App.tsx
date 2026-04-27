@@ -11,9 +11,10 @@ import { MatchDay } from './components/screens/MatchDay';
 import { Standings } from './components/screens/Standings';
 import { Schedule } from './components/screens/Schedule';
 import { Playoffs } from './components/screens/Playoffs';
+import { LeagueHistory } from './components/screens/LeagueHistory';
 import { Layout } from './components/Layout';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history';
 
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -176,7 +177,8 @@ export function App() {
         {nav === 'matchday'   && <MatchDay   state={gameState} />}
         {nav === 'standings'  && <Standings  state={gameState} />}
         {nav === 'schedule'   && <Schedule   state={gameState} />}
-        {nav === 'playoffs'   && <Playoffs   state={gameState} />}
+        {nav === 'playoffs'   && <Playoffs      state={gameState} />}
+        {nav === 'history'    && <LeagueHistory state={gameState} />}
       </Layout>
 
       {importViolators.length > 0 && (

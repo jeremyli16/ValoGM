@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history';
 
 interface Props {
   state: GameState;
@@ -19,6 +19,7 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
   { id: 'standings',  label: 'Standings' },
   { id: 'schedule',   label: 'Schedule' },
   { id: 'playoffs',   label: 'Playoffs' },
+  { id: 'history',    label: 'History' },
 ];
 
 function phaseTag(state: GameState) {
