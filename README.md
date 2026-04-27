@@ -61,6 +61,14 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Match history list with W/L indicators
 - Per-match detail: series score, win/loss banner with MVP, map scores, round timeline, full player stats split by team (your team first, sorted by rating)
 
+**History**
+- One split = one complete game-season (regular season + playoffs); three splits form one calendar season
+- Per-split results: split winner, runner-up (Grand Final loser), and split MVP (highest average rating across regular season and playoff matches)
+- Per-season awards (shown at end of every 3rd split): Season MVP, Best Duelist, Best Initiator, Best Controller, Best Sentinel
+- Seasons listed newest-first; splits within each season listed newest-first
+- Player's team champion banner highlighted in amber; season champion badge on each season block
+- Top bar and sidebar display calendar season and split number (e.g. "Season 1 — Split 2 — Week 4") rather than raw internal game-season counters
+
 ---
 
 ### Simulation Engine
