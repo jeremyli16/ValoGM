@@ -403,6 +403,21 @@ function checkPhaseTransition(state: GameState): GameState {
         state.standings.set(`${row.leagueId}:${row.season}:${row.teamId}`, row);
       });
     }
+
+    // Prune matches from exactly the calendar season 3 behind the current one
+    // (e.g. at calendar season 4, delete calendar season 1 = game-seasons 1–3)
+    const calSeason = Math.ceil(state.season / 3);
+    const targetCalSeason = calSeason - 3;
+    if (targetCalSeason >= 1) {
+      const toDelete: string[] = [];
+      state.matches.forEach((m, id) => {
+        if (Math.ceil(m.season / 3) === targetCalSeason) toDelete.push(id);
+      });
+      toDelete.forEach(id => {
+        state.matches.delete(id);
+        state.dirtyMatches.delete(id);
+      });
+    }
   }
 
   // Update act
