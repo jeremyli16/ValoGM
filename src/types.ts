@@ -416,6 +416,20 @@ export const MAP_POOL = [
   'Pearl', 'Lotus', 'Sunset', 'Abyss',
 ];
 
+// Attack-side win-rate bias per map (0 = perfectly balanced).
+// Based on VLR.gg pro play data across 2023–2025 international events.
+export const MAP_ATTACK_BIAS: Record<string, number> = {
+  Ascent:   +0.03,  // 53% attack — open mid, attacker-sided default
+  Bind:     +0.01,  // 51% attack — teleporters add aggression
+  Haven:    +0.02,  // 52% attack — three sites spreads defenders thin
+  Split:    -0.03,  // 47% attack — tight corridors, strong defender choke control
+  Fracture: +0.02,  // 52% attack — double attacker entry disrupts defender setups
+  Pearl:    -0.02,  // 48% attack — long sightlines favor defensive operators
+  Lotus:    +0.00,  // 50% attack — balanced around rotating doors
+  Sunset:   +0.01,  // 51% attack — slight attacker pressure advantage
+  Abyss:    +0.02,  // 52% attack — aggressive peak angles favor attackers
+};
+
 // ─── Player Generation Constants ──────────────────────────────────────────────
 
 export const ARCHETYPE_WEIGHTS: Record<PlayerArchetype, number> = {
