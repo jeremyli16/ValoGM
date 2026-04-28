@@ -62,17 +62,6 @@ function applyMatchMorale(
 
 // ─── Weekly tick helpers ──────────────────────────────────────────────────────
 
-function getMatchesForWeek(state: GameState): ScheduledMatch[] {
-  const out: ScheduledMatch[] = [];
-  state.matches.forEach(m => {
-    if (m.leagueId === state.leagueId && m.season === state.season &&
-        m.week === state.week && !m.isPlayoff) {
-      out.push(m);
-    }
-  });
-  return out;
-}
-
 function getAllMatchesForWeek(state: GameState): ScheduledMatch[] {
   const out: ScheduledMatch[] = [];
   state.matches.forEach(m => {
