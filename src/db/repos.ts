@@ -4,7 +4,7 @@ import type {
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
   Notification, PlayerMatchStat, GameState, Coach,
 } from '../types';
-import { MAP_POOL } from '../types';
+import { MAP_POOL, AGENT_BASELINES } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -238,6 +238,8 @@ export async function persistGameState(state: GameState): Promise<void> {
     splitHistory: state.splitHistory,
     seasonHistory: state.seasonHistory,
     activeMapPool: state.activeMapPool,
+    agentMeta: state.agentMeta,
+    agentMapMeta: state.agentMapMeta,
   });
 
   // 2. Dirty players
@@ -381,6 +383,9 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     splitHistory: saved.splitHistory ?? [],
     seasonHistory: saved.seasonHistory ?? [],
     activeMapPool: saved.activeMapPool ?? MAP_POOL.slice(0, 7),
+    agentMeta: saved.agentMeta ?? { ...AGENT_BASELINES },
+    agentMapMeta: saved.agentMapMeta ?? {},
+    agentPickCounts: {},
     transferOffers: offersArr,
     pendingDecisions: [],
     notifications: [],

@@ -99,6 +99,8 @@ export interface SerializedGameState {
   splitHistory?: SplitRecord[];
   seasonHistory?: SeasonRecord[];
   activeMapPool?: string[];
+  agentMeta?: Record<string, number>;
+  agentMapMeta?: Record<string, Record<string, number>>;
 }
 
 let _db: IDBPDatabase<ValoGMSchema> | null = null;

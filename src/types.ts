@@ -21,6 +21,7 @@ export interface Player {
   peakAge: number;
   primaryRole: PlayerRole;
   mainAgent: string;
+  agentPool?: string[];
   archetype: PlayerArchetype;
 
   trueAim: number;
@@ -101,6 +102,8 @@ export interface Team {
   headCoachId: string | null;
   assistantCoachId: string | null;
   mapPool: Record<string, number>;
+  mapComps?: Record<string, string[]>;
+  practiceAllocation?: Record<string, number>;
   morale: number;
   chemistry: number;
   wins: number;
@@ -322,6 +325,10 @@ export interface GameState {
   seasonHistory: SeasonRecord[];
   activeMapPool: string[];
 
+  agentMeta: Record<string, number>;
+  agentMapMeta: Record<string, Record<string, number>>;
+  agentPickCounts: Record<string, number>;
+
   dirtyPlayers: Set<string>;
   dirtyMatches: Set<string>;
   dirtyCoaches: Set<string>;
@@ -435,6 +442,17 @@ export const MAP_ATTACK_BIAS: Record<string, number> = {
   Breeze:   -0.02,
   Corrode:  -0.03,
 };
+
+// ─── Agent Meta Constants ─────────────────────────────────────────────────────
+
+export const AGENT_BASELINES: Record<string, number> = {
+  Jett: 70, Reyna: 60, Raze: 68, Neon: 55, Iso: 52, Yoru: 48,
+  Sova: 72, Fade: 65, Breach: 62, 'KAY/O': 58, Gekko: 60, Skye: 63,
+  Omen: 68, Astra: 66, Viper: 70, Brimstone: 58, Clove: 62, Harbor: 42,
+  Killjoy: 72, Cypher: 68, Sage: 60, Chamber: 58, Deadlock: 50, Vyse: 48,
+};
+
+export const PRACTICE_BUDGET = 5;
 
 // ─── Player Generation Constants ──────────────────────────────────────────────
 

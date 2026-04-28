@@ -14,12 +14,15 @@ import { randInt, clamp, weightedChoice } from './rng';
 
 interface PlayerState {
   id: string;
+  mainAgent: string;
   trueAim: number;
   trueGameSense: number;
   clutch: number;
   morale: number;
   assignedRole: PlayerRole;
   roleRating: number;
+  agentMetaMod: number;
+  agentMapDelta: number;
   credits: number;
   kills: number;
   deaths: number;
@@ -47,7 +50,7 @@ function playerCombatPower(p: PlayerState, buy: BuyType, side: 'attack' | 'defen
   const equipMod = EQUIP_MOD[buy];
   const sideMod = SIDE_MODS[p.assignedRole][side];
   const moraleMod = 0.90 + (p.morale / 100) * 0.15;
-  return base * roleMultiplier * equipMod * sideMod * moraleMod;
+  return base * roleMultiplier * equipMod * sideMod * moraleMod * p.agentMetaMod + p.agentMapDelta;
 }
 
 function teamCombatPower(
@@ -395,12 +398,15 @@ function buildPlayerState(
   const rr = roleRatings.get(rrKey);
   return {
     id: player.id,
+    mainAgent: player.mainAgent,
     trueAim: player.trueAim,
     trueGameSense: player.trueGameSense,
     clutch: player.clutch,
     morale: player.morale,
     assignedRole: player.primaryRole,
     roleRating: rr?.trueRating ?? 60,
+    agentMetaMod: 1.0,
+    agentMapDelta: 0,
     credits: 800,
     kills: 0,
     deaths: 0,
@@ -418,6 +424,8 @@ function simMap(
   statesA: PlayerState[],
   statesB: PlayerState[],
   rng: SeededRng,
+  agentMeta: Record<string, number> = {},
+  agentMapMeta: Record<string, Record<string, number>> = {},
 ): MapResult {
   const mapBias = MAP_ATTACK_BIAS[mapName] ?? 0;
   const practiceA = teamA.mapPool[mapName] ?? 50;
@@ -425,19 +433,33 @@ function simMap(
   const mapBonusA = 1.0 + (practiceA - 50) * 0.001;
   const mapBonusB = 1.0 + (practiceB - 50) * 0.001;
 
-  // Local copies with map bonus and zeroed stats — don't bleed between maps.
-  const localA: PlayerState[] = statesA.map(s => ({
-    ...s,
-    trueAim: clamp(s.trueAim * mapBonusA, 1, 100),
-    trueGameSense: clamp(s.trueGameSense * mapBonusA, 1, 100),
-    kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
-  }));
-  const localB: PlayerState[] = statesB.map(s => ({
-    ...s,
-    trueAim: clamp(s.trueAim * mapBonusB, 1, 100),
-    trueGameSense: clamp(s.trueGameSense * mapBonusB, 1, 100),
-    kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
-  }));
+  // Local copies with map bonus, agent meta modifiers, and zeroed stats.
+  const localA: PlayerState[] = statesA.map(s => {
+    const globalMeta = agentMeta[s.mainAgent] ?? 60;
+    const agentMetaMod = 0.90 + (globalMeta / 100) * 0.20;
+    const agentMapDelta = agentMapMeta[s.mainAgent]?.[mapName] ?? 0;
+    return {
+      ...s,
+      trueAim: clamp(s.trueAim * mapBonusA, 1, 100),
+      trueGameSense: clamp(s.trueGameSense * mapBonusA, 1, 100),
+      agentMetaMod,
+      agentMapDelta,
+      kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
+    };
+  });
+  const localB: PlayerState[] = statesB.map(s => {
+    const globalMeta = agentMeta[s.mainAgent] ?? 60;
+    const agentMetaMod = 0.90 + (globalMeta / 100) * 0.20;
+    const agentMapDelta = agentMapMeta[s.mainAgent]?.[mapName] ?? 0;
+    return {
+      ...s,
+      trueAim: clamp(s.trueAim * mapBonusB, 1, 100),
+      trueGameSense: clamp(s.trueGameSense * mapBonusB, 1, 100),
+      agentMetaMod,
+      agentMapDelta,
+      kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
+    };
+  });
 
   const econA: PlayerEconomy[] = localA.map(s => ({ playerId: s.id, credits: 800 }));
   const econB: PlayerEconomy[] = localB.map(s => ({ playerId: s.id, credits: 800 }));
@@ -649,7 +671,9 @@ export function simMatch(
   activeMapPool: string[],
   modifiers = { teamAMod: 1.0, teamBMod: 1.0 },
   coachTacticsA = 0,
-  coachTacticsB = 0
+  coachTacticsB = 0,
+  agentMeta: Record<string, number> = {},
+  agentMapMeta: Record<string, Record<string, number>> = {},
 ): MatchResult {
   const maps = resolveMapVeto(teamA, teamB, format, activeMapPool, rng);
   const needed = { bo1: 1, bo3: 2, bo5: 3 }[format];
@@ -689,7 +713,7 @@ export function simMatch(
 
   for (const mapName of maps) {
     if (winsA >= needed || winsB >= needed) break;
-    const mapResult = simMap(teamA, teamB, mapName, allStatesA, allStatesB, rng);
+    const mapResult = simMap(teamA, teamB, mapName, allStatesA, allStatesB, rng, agentMeta, agentMapMeta);
     mapResults.push(mapResult);
     totalRounds += mapResult.scoreA + mapResult.scoreB;
     if (mapResult.winner === 'A') winsA++; else winsB++;

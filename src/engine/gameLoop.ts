@@ -6,9 +6,9 @@ import type {
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
   PLAYER_WIN_DELTA, PLAYER_LOSS_DELTA,
-  HOME_NATIONALITIES, IMPORT_LIMITS, MAP_POOL,
+  HOME_NATIONALITIES, IMPORT_LIMITS, MAP_POOL, AGENT_BASELINES, PRACTICE_BUDGET,
 } from '../types';
-import { createRng } from './rng';
+import { createRng, randFloat, clamp } from './rng';
 import { developPlayer, applyAgingEffects, updateRoleRatings } from './playerGen';
 import { simMatch } from './matchSim';
 import {
@@ -113,6 +113,87 @@ function rotateMapPool(state: GameState): GameState {
   return state;
 }
 
+// ─── Practice Allocation ─────────────────────────────────────────────────────
+
+function applyPracticeAllocation(state: GameState): GameState {
+  const team = state.teams.get(state.playerTeamId);
+  if (!team) return state;
+  const allocation = team.practiceAllocation ?? {};
+  const pool = team.mapPool ?? {};
+  const newPool = { ...pool };
+
+  for (const mapName of MAP_POOL) {
+    const pts = allocation[mapName] ?? 0;
+    const current = newPool[mapName] ?? 50;
+    if (pts > 0) {
+      const rawGain = pts * 2;
+      const diminishing = rawGain * (1 - current / 120);
+      newPool[mapName] = Math.min(100, current + diminishing);
+    } else {
+      newPool[mapName] = Math.max(0, current - 0.5);
+    }
+  }
+
+  state.teams.set(state.playerTeamId, { ...team, mapPool: newPool });
+  return state;
+}
+
+// ─── Agent Patch ──────────────────────────────────────────────────────────────
+
+function applyAgentPatch(state: GameState): GameState {
+  const rng = createRng(state.seed + state.season * 7777 + 333);
+  const totalSlots = Object.values(state.agentPickCounts).reduce((a, b) => a + b, 0);
+
+  const nerfs: string[] = [];
+  const buffs: string[] = [];
+
+  for (const [agent, currentStrength] of Object.entries(state.agentMeta)) {
+    const pickCount = state.agentPickCounts[agent] ?? 0;
+    const pickRate = totalSlots > 0 ? pickCount / totalSlots : 1 / 24;
+
+    let delta = randFloat(rng, -8, 8);
+    if (pickRate > 0.12) delta -= randFloat(rng, 8, 18);
+    if (pickRate < 0.02) delta += randFloat(rng, 8, 18);
+    if (currentStrength > 80) delta -= randFloat(rng, 5, 15);
+    if (currentStrength < 20) delta += randFloat(rng, 5, 15);
+
+    const newStrength = clamp(currentStrength + delta, 15, 90);
+    const actualDelta = newStrength - currentStrength;
+    state.agentMeta[agent] = newStrength;
+
+    if (actualDelta <= -5) nerfs.push(`  ${agent}  ${Math.round(actualDelta)}  (${Math.round(pickRate * 100)}% pick rate)`);
+    else if (actualDelta >= 5) buffs.push(`  ${agent}  +${Math.round(actualDelta)}  (${Math.round(pickRate * 100)}% pick rate)`);
+  }
+
+  // Map-specific drift for all active maps
+  for (const agent of Object.keys(state.agentMeta)) {
+    if (!state.agentMapMeta[agent]) state.agentMapMeta[agent] = {};
+    for (const mapName of state.activeMapPool) {
+      const current = state.agentMapMeta[agent][mapName] ?? 0;
+      state.agentMapMeta[agent][mapName] = clamp(current + randFloat(rng, -0.03, 0.03), -0.15, 0.15);
+    }
+  }
+
+  const calSeason = Math.ceil(state.season / 3);
+  const splitNum = ((state.season - 1) % 3) + 1;
+  const lines: string[] = [];
+  if (nerfs.length > 0) { lines.push('NERFS'); nerfs.forEach(l => lines.push(l)); }
+  if (buffs.length > 0) { lines.push('BUFFS'); buffs.forEach(l => lines.push(l)); }
+  if (lines.length === 0) lines.push('No significant changes this patch.');
+
+  state.notifications.push({
+    id: notifId(),
+    type: 'development',
+    title: `Patch S${calSeason}E${splitNum} — Agent Updates`,
+    body: lines.join('\n'),
+    week: state.week,
+    read: false,
+  });
+
+  state.agentPickCounts = {};
+  return state;
+}
+
 // ─── Regular Season Simulation ────────────────────────────────────────────────
 
 function simWeekMatches(state: GameState): GameState {
@@ -134,8 +215,14 @@ function simWeekMatches(state: GameState): GameState {
     const result = simMatch(
       match.id, teamA, teamB, playersA, playersB,
       state.roleRatings, match.format, rng, state.activeMapPool,
-      { teamAMod: 1.0, teamBMod: 1.0 }, tacticsA, tacticsB
+      { teamAMod: 1.0, teamBMod: 1.0 }, tacticsA, tacticsB,
+      state.agentMeta, state.agentMapMeta,
     );
+
+    // Track agent picks for patch calculation
+    for (const p of [...playersA, ...playersB]) {
+      state.agentPickCounts[p.mainAgent] = (state.agentPickCounts[p.mainAgent] ?? 0) + 1;
+    }
 
     const updated = { ...match, result };
     state.matches.set(match.id, updated);
@@ -433,6 +520,9 @@ function checkPhaseTransition(state: GameState): GameState {
       state.teams.set(team.id, { ...team, wins: 0, losses: 0, roundDiff: 0, mapDiff: 0, points: 0 });
     });
 
+    // Apply agent patch (pick-rate + threshold correction, map drift, notification)
+    state = applyAgentPatch(state);
+
     // Rotate map pool (60% no change, 30% swap 1, 10% swap 2)
     state = rotateMapPool(state);
 
@@ -521,8 +611,14 @@ function simPlayoffStage(state: GameState): GameState {
       match.id, teamA, teamB, playersA, playersB,
       state.roleRatings, match.format, rng, state.activeMapPool, modifiers,
       effectiveCoachStat(teamA, state.coaches, 'tactics'),
-      effectiveCoachStat(teamB, state.coaches, 'tactics')
+      effectiveCoachStat(teamB, state.coaches, 'tactics'),
+      state.agentMeta, state.agentMapMeta,
     );
+
+    // Track agent picks for patch calculation
+    for (const p of [...playersA, ...playersB]) {
+      state.agentPickCounts[p.mainAgent] = (state.agentPickCounts[p.mainAgent] ?? 0) + 1;
+    }
 
     match.result = result;
 
@@ -1053,6 +1149,7 @@ export function advanceWeek(state: GameState): GameState {
   if (state.phase === 'regular_season') {
     state = autoFillRoster(state);
     state = simWeekMatches(state);
+    state = applyPracticeAllocation(state);
     state = weeklyPlayerTick(state);
     state = checkContractExpiry(state);
     state.week++;
@@ -1147,6 +1244,9 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     splitHistory: [],
     seasonHistory: [],
     activeMapPool: pickInitialMapPool(createRng(seed + 88888)),
+    agentMeta: { ...AGENT_BASELINES },
+    agentMapMeta: {},
+    agentPickCounts: {},
     pendingDecisions: [],
     notifications: [],
     transferOffers: [],

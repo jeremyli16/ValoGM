@@ -13,9 +13,10 @@ import { Schedule } from './components/screens/Schedule';
 import { Playoffs } from './components/screens/Playoffs';
 import { LeagueHistory } from './components/screens/LeagueHistory';
 import { Finances } from './components/screens/Finances';
+import { Tactics } from './components/screens/Tactics';
 import { Layout } from './components/Layout';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics';
 
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -127,6 +128,23 @@ export function App() {
     setGameState({ ...gameState });
   }, [gameState]);
 
+  const handleSetPracticeAllocation = useCallback((allocation: Record<string, number>) => {
+    if (!gameState) return;
+    const team = gameState.teams.get(gameState.playerTeamId);
+    if (!team) return;
+    gameState.teams.set(gameState.playerTeamId, { ...team, practiceAllocation: allocation });
+    setGameState({ ...gameState });
+  }, [gameState]);
+
+  const handleSetMapComp = useCallback((mapName: string, agents: string[]) => {
+    if (!gameState) return;
+    const team = gameState.teams.get(gameState.playerTeamId);
+    if (!team) return;
+    const newComps = { ...(team.mapComps ?? {}), [mapName]: agents };
+    gameState.teams.set(gameState.playerTeamId, { ...team, mapComps: newComps });
+    setGameState({ ...gameState });
+  }, [gameState]);
+
   const handleSubmitRenewal = useCallback(async (playerId: string, salary: number, length: number) => {
     if (!gameState) return;
     const next = submitRenewalOffer(gameState, playerId, salary, length);
@@ -188,6 +206,7 @@ export function App() {
         {nav === 'playoffs'   && <Playoffs      state={gameState} />}
         {nav === 'history'    && <LeagueHistory state={gameState} />}
         {nav === 'finances'   && <Finances state={gameState} onSubmitRenewal={handleSubmitRenewal} />}
+        {nav === 'tactics'    && <Tactics state={gameState} onSetPracticeAllocation={handleSetPracticeAllocation} onSetMapComp={handleSetMapComp} />}
       </Layout>
 
       {importViolators.length > 0 && (
