@@ -52,7 +52,7 @@ function MapPoolPanel({ state, onSet }: {
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '5px 8px',
         background: 'var(--bg-2)',
-        border: `1px solid ${noAlloc ? 'var(--red)' : 'var(--border)'}`,
+        border: '1px solid var(--border)',
         marginBottom: 4,
       }}>
         {/* Map name */}
@@ -99,7 +99,34 @@ function MapPoolPanel({ state, onSet }: {
 
         {/* Decay warning */}
         {noAlloc && (
-          <div style={{ color: 'var(--red)', fontSize: 11 }} title="No allocation — will decay">⚠</div>
+          <div style={{ position: 'relative', display: 'inline-flex' }}
+            onMouseEnter={e => {
+              const tip = (e.currentTarget as HTMLElement).querySelector('.decay-tip') as HTMLElement | null;
+              if (tip) tip.style.display = 'block';
+            }}
+            onMouseLeave={e => {
+              const tip = (e.currentTarget as HTMLElement).querySelector('.decay-tip') as HTMLElement | null;
+              if (tip) tip.style.display = 'none';
+            }}
+          >
+            <span style={{ color: 'var(--amber)', fontSize: 12, cursor: 'default' }}>⚠</span>
+            <div className="decay-tip" style={{
+              display: 'none',
+              position: 'absolute',
+              right: 0, bottom: 'calc(100% + 4px)',
+              background: '#1f1f27',
+              border: '1px solid var(--amber)',
+              color: '#e8e8f0',
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+              padding: '4px 8px',
+              whiteSpace: 'nowrap',
+              zIndex: 10,
+              pointerEvents: 'none',
+            }}>
+              Map skill will decay this week
+            </div>
+          </div>
         )}
       </div>
     );
@@ -221,25 +248,26 @@ function CompPanel({ state, onSetComp }: {
                   onChange={e => setAgent(i, e.target.value)}
                   style={{
                     flex: 1,
-                    background: 'var(--bg-0)',
+                    background: '#17171d',
                     border: `1px solid ${isOffAgent ? 'var(--amber)' : 'var(--border)'}`,
-                    color: 'var(--text-primary)',
+                    color: '#e8e8f0',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 12,
                     padding: '3px 6px',
+                    colorScheme: 'dark',
                   }}
                 >
-                  <optgroup label="Main">
-                    <option value={player.mainAgent}>{player.mainAgent}</option>
+                  <optgroup label="Main" style={{ background: '#17171d', color: '#e8e8f0' }}>
+                    <option value={player.mainAgent} style={{ background: '#17171d', color: '#e8e8f0' }}>{player.mainAgent}</option>
                   </optgroup>
-                  <optgroup label="Agent Pool">
+                  <optgroup label="Agent Pool" style={{ background: '#17171d', color: '#e8e8f0' }}>
                     {playerAgents.slice(1).map(a => (
-                      <option key={a} value={a}>{a} (off)</option>
+                      <option key={a} value={a} style={{ background: '#17171d', color: '#9090a8' }}>{a} (off)</option>
                     ))}
                   </optgroup>
-                  <optgroup label="Off-Role (warning)">
+                  <optgroup label="Off-Role (warning)" style={{ background: '#17171d', color: '#e8e8f0' }}>
                     {allAgents.filter(a => !playerAgents.includes(a) && AGENT_ROLE[a] !== player.primaryRole).map(a => (
-                      <option key={a} value={a}>{a} ⚠</option>
+                      <option key={a} value={a} style={{ background: '#17171d', color: '#f5a623' }}>{a} ⚠</option>
                     ))}
                   </optgroup>
                 </select>
@@ -291,16 +319,16 @@ function MetaPanel({ state }: { state: GameState }) {
   const sorted = Object.entries(meta).sort(([, a], [, b]) => b - a);
 
   const tiers = [
-    { label: 'S', min: 70, color: 'var(--teal)' },
-    { label: 'A', min: 60, color: 'var(--amber)' },
-    { label: 'B', min: 50, color: 'var(--text-secondary)' },
-    { label: 'C', min: 0,  color: 'var(--text-dim)' },
+    { label: 'S', min: 70, max: Infinity, color: 'var(--teal)' },
+    { label: 'A', min: 60, max: 70,       color: 'var(--amber)' },
+    { label: 'B', min: 50, max: 60,       color: 'var(--text-secondary)' },
+    { label: 'C', min: 0,  max: 50,       color: 'var(--text-dim)' },
   ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
       {tiers.map(tier => {
-        const agents = sorted.filter(([, s]) => s >= tier.min && (tier.label === 'C' || s < (tiers[tiers.indexOf(tier) - 1]?.min ?? 200)));
+        const agents = sorted.filter(([, s]) => s >= tier.min && s < tier.max);
         if (agents.length === 0) return null;
         return (
           <div key={tier.label} style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
