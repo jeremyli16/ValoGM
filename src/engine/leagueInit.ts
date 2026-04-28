@@ -200,6 +200,13 @@ function assignRoster(
   team.rosterIds = roster.map(p => p.id);
 }
 
+// ─── Map Pool ─────────────────────────────────────────────────────────────────
+
+// Pick the 7 active maps for a new game from the full MAP_POOL universe.
+export function pickInitialMapPool(rng: SeededRng): string[] {
+  return shuffle(rng, [...MAP_POOL]).slice(0, 7);
+}
+
 // ─── Schedule Generation ──────────────────────────────────────────────────────
 
 export function generateSchedule(

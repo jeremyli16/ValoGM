@@ -320,6 +320,7 @@ export interface GameState {
 
   splitHistory: SplitRecord[];
   seasonHistory: SeasonRecord[];
+  activeMapPool: string[];
 
   dirtyPlayers: Set<string>;
   dirtyMatches: Set<string>;
@@ -411,23 +412,28 @@ export const ROLE_AGENTS: Record<PlayerRole, string[]> = {
   sentinel:   ['Killjoy', 'Cypher', 'Sage', 'Chamber', 'Deadlock', 'Vyse'],
 };
 
+// Full map universe — 12 maps. Only 7 are active at a time (see GameState.activeMapPool).
 export const MAP_POOL = [
   'Ascent', 'Bind', 'Haven', 'Split', 'Fracture',
   'Pearl', 'Lotus', 'Sunset', 'Abyss',
+  'Icebox', 'Breeze', 'Corrode',
 ];
 
 // Attack-side win-rate bias per map (0 = perfectly balanced).
 // Based on VLR.gg pro play data across 2023–2025 international events.
 export const MAP_ATTACK_BIAS: Record<string, number> = {
-  Ascent:   +0.03,  // 53% attack — open mid, attacker-sided default
-  Bind:     +0.01,  // 51% attack — teleporters add aggression
-  Haven:    +0.02,  // 52% attack — three sites spreads defenders thin
-  Split:    -0.03,  // 47% attack — tight corridors, strong defender choke control
-  Fracture: +0.02,  // 52% attack — double attacker entry disrupts defender setups
-  Pearl:    -0.02,  // 48% attack — long sightlines favor defensive operators
-  Lotus:    +0.00,  // 50% attack — balanced around rotating doors
-  Sunset:   +0.01,  // 51% attack — slight attacker pressure advantage
-  Abyss:    +0.02,  // 52% attack — aggressive peak angles favor attackers
+  Ascent:   +0.03,
+  Bind:     +0.01,
+  Haven:    +0.02,
+  Split:    -0.03,
+  Fracture: +0.02,
+  Pearl:    -0.02,
+  Lotus:    +0.00,
+  Sunset:   +0.01,
+  Abyss:    +0.02,
+  Icebox:   -0.03,
+  Breeze:   -0.02,
+  Corrode:  -0.03,
 };
 
 // ─── Player Generation Constants ──────────────────────────────────────────────

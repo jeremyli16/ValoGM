@@ -98,6 +98,7 @@ export interface SerializedGameState {
   freeAgentCoaches: string[];
   splitHistory?: SplitRecord[];
   seasonHistory?: SeasonRecord[];
+  activeMapPool?: string[];
 }
 
 let _db: IDBPDatabase<ValoGMSchema> | null = null;

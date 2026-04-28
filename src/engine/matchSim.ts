@@ -5,7 +5,7 @@ import type {
 import {
   SIDE_MODS, EQUIP_MOD, KILL_BONUS, WIN_INCOME, SPIKE_PLANT_BONUS,
   CREDIT_CAP, FULL_BUY_THRESHOLD, HALF_BUY_THRESHOLD,
-  getLossBonus, SURVIVAL_BONUS, MAP_POOL, MAP_ATTACK_BIAS,
+  getLossBonus, SURVIVAL_BONUS, MAP_ATTACK_BIAS,
 } from '../types';
 import type { SeededRng } from './rng';
 import { randInt, clamp, weightedChoice } from './rng';
@@ -552,11 +552,12 @@ function resolveMapVeto(
   teamA: Team,
   teamB: Team,
   format: 'bo1' | 'bo3' | 'bo5',
+  activeMapPool: string[],
   rng: SeededRng
 ): string[] {
   // relScore > 0 means Team A favored; < 0 means Team B favored.
   const relScores: Record<string, number> = {};
-  for (const m of MAP_POOL) {
+  for (const m of activeMapPool) {
     relScores[m] = (teamA.mapPool[m] ?? 50) - (teamB.mapPool[m] ?? 50) + (rng() - 0.5) * 15;
   }
 
@@ -582,14 +583,14 @@ function resolveMapVeto(
 
   if (format === 'bo1') {
     // Alternating bans (A first) until 1 map remains: 8 bans from 9-map pool.
-    let pool = [...MAP_POOL];
+    let pool = [...activeMapPool];
     for (let i = 0; i < 8; i++) pool = ban(pool, i % 2 === 0 ? 'A' : 'B');
     return pool;
   }
 
   if (format === 'bo3') {
     // A ban → B ban → A pick → B pick → A ban → B ban → decider
-    let pool = [...MAP_POOL];
+    let pool = [...activeMapPool];
     pool = ban(pool, 'A');
     pool = ban(pool, 'B');
     const [m1, p1] = pick(pool, 'A'); pool = p1;
@@ -600,7 +601,7 @@ function resolveMapVeto(
   }
 
   // bo5: A ban → B ban → A pick → B pick → B pick → A pick → decider
-  let pool = [...MAP_POOL];
+  let pool = [...activeMapPool];
   pool = ban(pool, 'A');
   pool = ban(pool, 'B');
   const [m1, p1] = pick(pool, 'A'); pool = p1;
@@ -645,11 +646,12 @@ export function simMatch(
   roleRatings: Map<string, PlayerRoleRatingRecord>,
   format: 'bo1' | 'bo3' | 'bo5',
   rng: SeededRng,
+  activeMapPool: string[],
   modifiers = { teamAMod: 1.0, teamBMod: 1.0 },
   coachTacticsA = 0,
   coachTacticsB = 0
 ): MatchResult {
-  const maps = resolveMapVeto(teamA, teamB, format, rng);
+  const maps = resolveMapVeto(teamA, teamB, format, activeMapPool, rng);
   const needed = { bo1: 1, bo3: 2, bo5: 3 }[format];
   let winsA = 0, winsB = 0;
   const mapResults: MapResult[] = [];

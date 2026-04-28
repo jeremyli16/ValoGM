@@ -95,6 +95,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **Realistic stat generation:** each round death produces exactly one kill credited to a role+skill-weighted opponent; survivors selected by role+skill probability; damage includes chip damage ensuring all players accumulate ADR even without kills — K/D ratios match pro play (0.7–2.0 range)
 - **ACS-based rating:** per-round Average Combat Score uses the real Valorant formula — raw damage dealt, plus kill points by enemies-alive tier (150/130/110/90/70), plus multi-kill bonuses (+50 per extra kill, +200 ace), plus non-damaging assists ×25; normalised to ~1.0 for an average player
 - **Real map veto:** bo1 = alternating bans until 1 map remains; bo3 = A ban → B ban → A pick → B pick → A ban → B ban → decider; bo5 = 2 bans then alternating picks + decider; teams ban the opponent's strongest map and pick their own strongest map
+- **12-map universe with 7-map active rotation:** full pool is Ascent, Bind, Haven, Split, Fracture, Pearl, Lotus, Sunset, Abyss, Icebox, Breeze, Corrode; only 7 are active at any time (`GameState.activeMapPool`); veto and match simulation use the active pool only
+- **Per-split map rotation:** at each new split, the pool may rotate — 60% chance no change, 30% chance 1 map swaps out, 10% chance 2 maps swap out; incoming maps are drawn from the reserve; a "Map Pool Update" notification names what was added and removed; seeded per-game so rotation history is deterministic and reproducible
 - Per-match stats (K/D/A, ADR, Rating) written to IndexedDB after each simulated match and fetched per season for display
 - **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
@@ -152,7 +154,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.
 
 ### Map Pool Editing
-Each team has a `mapPool: Record<string, number>` (0–100 practice score per map) that already affects match simulation — higher practice scores give a small aim/game-sense multiplier on that map, and teams ban/pick maps based on their relative advantage. However, there is no UI for the player to view or adjust their team's map pool scores.
+Each team has a `mapPool: Record<string, number>` (0–100 practice score per map) covering all 12 maps in the universe. Practice scores already affect match simulation — higher scores give a small aim/game-sense multiplier on that map and influence ban/pick decisions. However, there is no UI for the player to view or adjust their team's map pool scores; teams cannot actively train on maps coming into the rotation.
 
 ### Chemistry
 `Team.chemistry` is tracked but never read. No mechanic increases or decreases it (e.g., playing together, transfers, losing streaks), and it has no influence on match simulation.

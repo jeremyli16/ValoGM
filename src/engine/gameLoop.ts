@@ -6,14 +6,14 @@ import type {
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
   PLAYER_WIN_DELTA, PLAYER_LOSS_DELTA,
-  HOME_NATIONALITIES, IMPORT_LIMITS,
+  HOME_NATIONALITIES, IMPORT_LIMITS, MAP_POOL,
 } from '../types';
 import { createRng } from './rng';
 import { developPlayer, applyAgingEffects, updateRoleRatings } from './playerGen';
 import { simMatch } from './matchSim';
 import {
   updateStandingsAfterMatch, sortStandings, buildPlayoffBracket,
-  getGrandFinalFatigueMod, generateSchedule, initStandings,
+  getGrandFinalFatigueMod, generateSchedule, initStandings, pickInitialMapPool,
 } from './leagueInit';
 
 let _nextNotifId = 1;
@@ -78,6 +78,43 @@ function getRosterPlayers(state: GameState, teamId: string): Player[] {
   return team.rosterIds.map(id => state.players.get(id)!).filter(Boolean);
 }
 
+// ─── Map Pool Rotation ────────────────────────────────────────────────────────
+
+function rotateMapPool(state: GameState): GameState {
+  const rng = createRng(state.seed + state.season * 9999 + 777);
+  const roll = rng();
+  const swapCount = roll < 0.60 ? 0 : roll < 0.90 ? 1 : 2;
+  if (swapCount === 0) return state;
+
+  const current = [...state.activeMapPool];
+  const reserve = MAP_POOL.filter(m => !current.includes(m));
+  const removed: string[] = [];
+  const added: string[] = [];
+
+  for (let i = 0; i < swapCount && reserve.length > 0; i++) {
+    const ri = Math.floor(rng() * current.length);
+    const ai = Math.floor(rng() * reserve.length);
+    removed.push(current.splice(ri, 1)[0]);
+    const newMap = reserve.splice(ai, 1)[0];
+    current.push(newMap);
+    added.push(newMap);
+  }
+
+  state.activeMapPool = current;
+  state.notifications.push({
+    id: notifId(),
+    type: 'development',
+    title: 'Map Pool Update',
+    body: `${removed.join(', ')} removed — ${added.join(', ')} added`,
+    week: state.week,
+    read: false,
+  });
+
+  return state;
+}
+
+// ─── Regular Season Simulation ────────────────────────────────────────────────
+
 function simWeekMatches(state: GameState): GameState {
   const rng = createRng(state.seed + state.season * 1000 + state.week);
   const weekMatches = getAllMatchesForWeek(state);
@@ -96,7 +133,7 @@ function simWeekMatches(state: GameState): GameState {
 
     const result = simMatch(
       match.id, teamA, teamB, playersA, playersB,
-      state.roleRatings, match.format, rng,
+      state.roleRatings, match.format, rng, state.activeMapPool,
       { teamAMod: 1.0, teamBMod: 1.0 }, tacticsA, tacticsB
     );
 
@@ -396,6 +433,9 @@ function checkPhaseTransition(state: GameState): GameState {
       state.teams.set(team.id, { ...team, wins: 0, losses: 0, roundDiff: 0, mapDiff: 0, points: 0 });
     });
 
+    // Rotate map pool (60% no change, 30% swap 1, 10% swap 2)
+    state = rotateMapPool(state);
+
     // Generate new schedule
     const league = state.leagues.get(state.leagueId);
     if (league) {
@@ -479,7 +519,7 @@ function simPlayoffStage(state: GameState): GameState {
     const playersB = getRosterPlayers(state, match.teamBId);
     const result = simMatch(
       match.id, teamA, teamB, playersA, playersB,
-      state.roleRatings, match.format, rng, modifiers,
+      state.roleRatings, match.format, rng, state.activeMapPool, modifiers,
       effectiveCoachStat(teamA, state.coaches, 'tactics'),
       effectiveCoachStat(teamB, state.coaches, 'tactics')
     );
@@ -1106,6 +1146,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     freeAgentCoaches: init.coaches.filter(c => !c.teamId).map(c => c.id),
     splitHistory: [],
     seasonHistory: [],
+    activeMapPool: pickInitialMapPool(createRng(seed + 88888)),
     pendingDecisions: [],
     notifications: [],
     transferOffers: [],
