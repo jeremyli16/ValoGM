@@ -55,11 +55,18 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Live bracket once playoffs begin (teal badge)
 - Full double-elimination layout: Upper R1 → Upper SF → Upper Final; Lower R1 → Lower R2 → Lower SF → Lower Final → Grand Final
 - 8 teams qualify (top 4 per group); seeds 1 & 2 receive byes into Upper SF
+- **Structured weekly schedule:** Week 1 = 2× Upper R1; Week 2 = 2× Lower R1; Week 3 = 2× Upper SF; Week 4 = 2× Lower R2; Week 5 = Upper Final + Lower R3; Week 6 = Lower Final; Week 7 = Grand Final — multiple matches simulated per week advance
 - Team slots show seed, name, and series score; player team highlighted in red; eliminated teams dimmed
 
 **Match Day**
 - Match history list with W/L indicators
 - Per-match detail: series score, win/loss banner with MVP, map scores, round timeline, full player stats split by team (your team first, sorted by rating)
+
+**Finances**
+- Contract list for all rostered players: salary, calendar years remaining, expiry status (active / expiring / expired)
+- **Contract renewal:** submit a new salary + length offer for any player; offer resolved on the next week advance; accepted offers extend the player's contract using calendar-year alignment
+- Head and assistant coach contract display with role, salary, and years remaining
+- Budget summary: total payroll vs. available budget
 
 **History**
 - One split = one complete game-season (regular season + playoffs); three splits form one calendar season
@@ -75,13 +82,20 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **Match Simulation**
 - Per-round economy: win income, loss bonuses (streak-aware), kill/plant bonuses, credit cap
-- Buy type decisions (full buy / half buy / force / eco / pistol) based on credits
+- Buy type decisions (full buy / half buy / force / eco / pistol) based on credits and round number
+- **Pistol bonus-round economy:** team that loses the pistol round (rounds 1 / 13) is forced to eco on round 2 / 14, saving full budget for a guaranteed full buy on round 3 / 15 — matches the real Valorant pistol → eco → bonus-round cadence
 - Player combat power: Aim (55%) + Game Sense (30%) + Clutch (15%), modified by role rating, equipment tier, side (attack/defense), and morale
 - Role side modifiers: Duelists strong on attack, Sentinels on defense, Controllers on defense, Initiators balanced
+- **Role-differentiated kill and death rates:** Duelists entry-frag (kill weight ×1.30, survival weight ×0.80); Sentinels hold safe angles (survival ×1.25); Initiators and Controllers support (survival ×1.10 / ×1.00, kill weight ×0.90 / ×0.80) — produces realistic per-role stat profiles
 - Team synergy bonus (+6%) when all 4 roles are present
-- Overtime: sides switch at 12–12, alternate each round, win by 2
-- **Realistic stat generation:** each round death produces exactly one kill credited to a skill-weighted opponent (aim 55%, game sense 30%, clutch 15%); survivors are selected by weighted probability rather than uniform random, so skilled players die less often; damage includes a chip-damage floor ensuring all players accumulate ADR even without kills — produces realistic K/D ratios (0.7–2.0 range) matching pro play
-- Per-match stats (K/D/A, ADR, rating) written to IndexedDB after each simulated match and fetched per season for display
+- **Map-specific attack/defense bias** sourced from VLR.gg pro-play data: Split −0.03, Pearl −0.02, Bind +0.01, Haven +0.02, Fracture +0.02, Abyss +0.02, Ascent +0.03; bias shifts the per-round win probability of each round played on that map
+- **Clutch mechanic:** when one player faces two or more opponents mid-round, a separate clutch check fires — 1v2 ≈ 28%, 1v3 ≈ 12%, 1v4 ≈ 5%, 1v5 ≈ 2% base rate (sourced from VLR.gg), scaled by the clutch player's Clutch stat (×0.7–1.3); success credits the clutch player with all remaining kills; failure on a non-match-point round results in a weapon save (player escapes)
+- **Weapon saves:** losing-side survivor who fails a clutch check saves their rifle for the next round (does not die, no kill credited), unless it is match point — on match point all players fight to the death
+- **Overtime (MR2 per set):** proper double-round sets matching real Valorant OT; each set is two rounds with an intra-set side swap; a team wins the map only by winning both rounds in a set (leading by 2 overall); if 1–1 in a set, another set starts with the same attack side
+- **Realistic stat generation:** each round death produces exactly one kill credited to a role+skill-weighted opponent; survivors selected by role+skill probability; damage includes chip damage ensuring all players accumulate ADR even without kills — K/D ratios match pro play (0.7–2.0 range)
+- **ACS-based rating:** per-round Average Combat Score uses the real Valorant formula — raw damage dealt, plus kill points by enemies-alive tier (150/130/110/90/70), plus multi-kill bonuses (+50 per extra kill, +200 ace), plus non-damaging assists ×25; normalised to ~1.0 for an average player
+- **Real map veto:** bo1 = alternating bans until 1 map remains; bo3 = A ban → B ban → A pick → B pick → A ban → B ban → decider; bo5 = 2 bans then alternating picks + decider; teams ban the opponent's strongest map and pick their own strongest map
+- Per-match stats (K/D/A, ADR, Rating) written to IndexedDB after each simulated match and fetched per season for display
 - **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
 **Player Generation**
@@ -100,7 +114,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - 12 partnership teams + 8 challengers teams per region
 - Prestige-ordered roster draft from a shared player pool; bench roster is optional (teams may start with zero substitutes)
 - Import rules enforced at draft (max 1 non-home-region starter per team)
-- Round-robin schedule generation split into two groups (Group A / Group B)
+- **Round-robin schedule:** polygon-rotation algorithm guarantees every team plays exactly once per week across 5 regular-season weeks (3 matches per group per week, 6 total); no team sits out any week
 - Snake-draft group seeding
 
 **Game Phases**
@@ -115,6 +129,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Coach salaries scale with average rating; coaches are persisted to IndexedDB and tracked via dirty flag
 
 **Transfer System**
+- **Calendar-year contracts:** contract length is measured in calendar years (groups of 3 splits); `endSeason` is always divisible by 3; a contract signed mid-split counts the current calendar year as year 1; contracts only decrement at the end of each calendar year (after every 3rd split), not per-split
 - **Free agents** sign directly — no fee required; acceptance weighted heavily toward any reasonable salary offer
 - **Contracted players** require a non-negotiable buyout: `salary × yearsRemaining × skillMultiplier (0.75–1.5)`; bench players receive a 40% discount on their buyout (teams holding players on the bench are easier to buy out)
 - **Bench salary rule:** players in the substitute slot cost 50% of their contract salary in payroll; starters cost full salary — discourages hoarding
@@ -133,14 +148,11 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 ## Not Yet Implemented
 
-### Contract Renewals
-Expiring contracts generate notifications, but there is no UI to negotiate renewals, reject them, or let a player walk to free agency at season end. The `Decision` flow intended for this has no renderer.
-
 ### Scouting
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.
 
-### Map Pool
-Each team has a `mapPool: Record<string, number>` representing strength per map, and a global `MAP_POOL` constant defines the active map pool. Neither is read during match simulation — maps are selected but team map preferences have no effect on outcomes.
+### Map Pool Editing
+Each team has a `mapPool: Record<string, number>` (0–100 practice score per map) that already affects match simulation — higher practice scores give a small aim/game-sense multiplier on that map, and teams ban/pick maps based on their relative advantage. However, there is no UI for the player to view or adjust their team's map pool scores.
 
 ### Chemistry
 `Team.chemistry` is tracked but never read. No mechanic increases or decreases it (e.g., playing together, transfers, losing streaks), and it has no influence on match simulation.
