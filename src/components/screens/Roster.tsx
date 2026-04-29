@@ -23,10 +23,11 @@ interface SeasonAvg {
   deaths: number;
   assists: number;
   adr: number;
+  acs: number;
   rating: number;
 }
 
-function avgFromStats(stats: { kills: number; deaths: number; assists: number; adr: number; rating: number }[]): SeasonAvg | null {
+function avgFromStats(stats: { kills: number; deaths: number; assists: number; adr: number; acs: number; rating: number }[]): SeasonAvg | null {
   if (stats.length === 0) return null;
   const n = stats.length;
   return {
@@ -35,6 +36,7 @@ function avgFromStats(stats: { kills: number; deaths: number; assists: number; a
     deaths:  Math.round(stats.reduce((s, e) => s + e.deaths,  0) / n * 10) / 10,
     assists: Math.round(stats.reduce((s, e) => s + e.assists, 0) / n * 10) / 10,
     adr:     Math.round(stats.reduce((s, e) => s + e.adr,     0) / n),
+    acs:     Math.round(stats.reduce((s, e) => s + e.acs,     0) / n),
     rating:  Math.round(stats.reduce((s, e) => s + e.rating,  0) / n * 100) / 100,
   };
 }
@@ -131,7 +133,11 @@ function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, o
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+          <div style={{ display: 'flex', gap: 12, marginTop: 6, flexWrap: 'wrap' }}>
+            <div>
+              <span className="text-dim text-xs">ACS </span>
+              <span className="font-mono text-xs">{seasonAvg.acs}</span>
+            </div>
             <div>
               <span className="text-dim text-xs">ADR </span>
               <span className="font-mono text-xs">{seasonAvg.adr}</span>

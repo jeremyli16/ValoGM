@@ -130,7 +130,7 @@ export function Schedule({ state }: Props) {
                 <div style={{ marginTop: 10, borderTop: '1px solid var(--border-dim)', paddingTop: 10 }}>
                   <table className="data-table">
                     <thead>
-                      <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ADR</th><th>Rating</th></tr>
+                      <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ACS</th><th>ADR</th><th>Rating</th></tr>
                     </thead>
                     <tbody>
                       {myStats.map(stat => {
@@ -143,6 +143,7 @@ export function Schedule({ state }: Props) {
                             <td className="font-mono">{stat.deaths}</td>
                             <td className="font-mono">{stat.assists}</td>
                             <td className="font-mono">{kd}</td>
+                            <td className="font-mono">{stat.acs ?? '—'}</td>
                             <td className="font-mono">{stat.adr}</td>
                             <td className="font-mono" style={{
                               color: stat.rating >= 1.2 ? 'var(--teal)' : stat.rating < 0.8 ? 'var(--red)' : 'var(--text-primary)',

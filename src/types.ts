@@ -212,6 +212,7 @@ export interface PlayerMatchStat {
   deaths: number;
   assists: number;
   adr: number;
+  acs: number;
   rating: number;
 }
 

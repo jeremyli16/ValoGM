@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import type { GameState, ScheduledMatch, Notification, StandingsRow } from '../../types';
 import { BENCH_SALARY_FACTOR } from '../../types';
 import { sortStandings } from '../../engine/leagueInit';
+import { playerMatchStatsRepo } from '../../db/repos';
 
 interface Props {
   state: GameState;
@@ -63,12 +65,40 @@ function NotifItem({ notif }: { notif: Notification }) {
   );
 }
 
+interface QuickStat { acs: number; rating: number }
+
 export function Dashboard({ state }: Props) {
   const team = state.teams.get(state.playerTeamId);
   const org = team ? [...state.orgs.values()].find(o => o.teamId === state.playerTeamId) : null;
   const nextMatch = getNextMatch(state);
   const position = getStandingsPosition(state);
   const recentNotifs = state.notifications.slice(-8).reverse();
+
+  const [quickStats, setQuickStats] = useState<Map<string, QuickStat>>(new Map());
+
+  useEffect(() => {
+    const playerIds = [...(team?.rosterIds ?? []), ...(team?.subIds ?? [])];
+    if (playerIds.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      playerIds.map(id =>
+        playerMatchStatsRepo.getByPlayerSeason(id, state.season).then(stats => {
+          if (stats.length === 0) return [id, null] as const;
+          const n = stats.length;
+          return [id, {
+            acs:    Math.round(stats.reduce((s, e) => s + (e.acs ?? 0), 0) / n),
+            rating: Math.round(stats.reduce((s, e) => s + e.rating, 0) / n * 100) / 100,
+          }] as const;
+        })
+      )
+    ).then(entries => {
+      if (cancelled) return;
+      const map = new Map<string, QuickStat>();
+      entries.forEach(([id, stat]) => { if (stat) map.set(id, stat); });
+      setQuickStats(map);
+    });
+    return () => { cancelled = true; };
+  }, [state.playerTeamId, state.season, state.week]);
 
   const standingsRow = state.standings.get(`${state.leagueId}:${state.season}:${state.playerTeamId}`);
 
@@ -126,15 +156,28 @@ export function Dashboard({ state }: Props) {
         <div className="card p-3 flex-col gap-2">
           <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 4 }}>Active Roster</div>
           <TeamMoraleBar morale={team?.morale ?? 75} />
-          {rosterPlayers.map(p => p && (
-            <div key={p.id} className="flex justify-between items-center" style={{ padding: '4px 0', borderBottom: '1px solid var(--border-dim)' }}>
-              <div className="flex gap-2 items-center">
-                <span className={`role-badge ${p.primaryRole}`}>{p.primaryRole.slice(0, 3).toUpperCase()}</span>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{p.alias}</span>
+          {rosterPlayers.map(p => {
+            if (!p) return null;
+            const qs = quickStats.get(p.id);
+            return (
+              <div key={p.id} className="flex justify-between items-center" style={{ padding: '4px 0', borderBottom: '1px solid var(--border-dim)' }}>
+                <div className="flex gap-2 items-center">
+                  <span className={`role-badge ${p.primaryRole}`}>{p.primaryRole.slice(0, 3).toUpperCase()}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{p.alias}</span>
+                </div>
+                {qs ? (
+                  <div className="flex gap-2 items-center">
+                    <span className="font-mono text-xs text-dim">ACS {qs.acs}</span>
+                    <span className="font-mono text-xs" style={{
+                      color: qs.rating >= 1.2 ? 'var(--teal)' : qs.rating < 0.8 ? 'var(--red)' : 'var(--text-secondary)',
+                    }}>{qs.rating.toFixed(2)}</span>
+                  </div>
+                ) : (
+                  <span className="font-mono text-xs text-dim">{p.nationality}</span>
+                )}
               </div>
-              <span className="font-mono text-xs text-dim">{p.nationality}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Notifications */}

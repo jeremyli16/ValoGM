@@ -635,8 +635,9 @@ function resolveMapVeto(
 
 // ─── Series Simulation ────────────────────────────────────────────────────────
 
-// Rating normalised to ~1.0 for an average pro player using the ACS formula.
-// ACS per round ≈ 250 for a league-average player across a bo3.
+// VLR Rating 2.0 approximation.
+// Components: ACS-based kill contribution, death penalty, reduced assists, ADRa.
+// Calibrated so an average pro (KPR≈0.75, DPR≈0.75, APR≈0.30, ADR≈130) → 1.00.
 function computePlayerStats(
   matchId: string,
   statesA: PlayerState[],
@@ -644,9 +645,22 @@ function computePlayerStats(
   totalRounds: number
 ): PlayerMatchStat[] {
   return [...statesA, ...statesB].map(s => {
-    const adr = totalRounds > 0 ? s.roundDamage / totalRounds : 0;
-    const acsPerRound = totalRounds > 0 ? s.acs / totalRounds : 0;
-    const rating = clamp(acsPerRound / 250, 0, 3);
+    const r = Math.max(1, totalRounds);
+    const adr = s.roundDamage / r;
+    const acsPerRound = s.acs / r;
+    const dpr = s.deaths / r;
+    const apr = s.assists / r;
+    // ADRa: damage not already accounted for by kills (avg ~130 dmg/kill)
+    const adraNorm = Math.max(0, s.roundDamage - s.kills * 130) / r / 32;
+
+    const rating = clamp(
+      (acsPerRound / 250) * 0.60
+      - (dpr / 0.75) * 0.24
+      + (apr / 0.30) * 0.10
+      + adraNorm * 0.10
+      + 0.44,
+      0, 3
+    );
     return {
       playerId: s.id,
       matchId,
@@ -654,6 +668,7 @@ function computePlayerStats(
       deaths:  s.deaths,
       assists: s.assists,
       adr:     Math.round(adr),
+      acs:     Math.round(acsPerRound),
       rating:  Math.round(rating * 100) / 100,
     };
   });
