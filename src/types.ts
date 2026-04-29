@@ -213,6 +213,7 @@ export interface PlayerMatchStat {
   assists: number;
   adr: number;
   acs: number;
+  rounds: number;
   rating: number;
 }
 

@@ -27,7 +27,7 @@ interface SeasonAvg {
   rating: number;
 }
 
-function avgFromStats(stats: { kills: number; deaths: number; assists: number; adr: number; acs: number; rating: number }[]): SeasonAvg | null {
+function avgFromStats(stats: { kills: number; deaths: number; assists: number; adr: number; acs: number; rounds?: number; rating: number }[]): SeasonAvg | null {
   if (stats.length === 0) return null;
   const n = stats.length;
   return {

@@ -669,6 +669,7 @@ function computePlayerStats(
       assists: s.assists,
       adr:     Math.round(adr),
       acs:     Math.round(acsPerRound),
+      rounds:  totalRounds,
       rating:  Math.round(rating * 100) / 100,
     };
   });

@@ -142,6 +142,10 @@ export const playerMatchStatsRepo = {
     const all = await (await getDb()).getAllFromIndex('playerMatchStats', 'by-player', playerId);
     return all.filter(s => s.season === season);
   },
+  async getAllBySeason(season: number): Promise<(PlayerMatchStat & { id: string; season: number })[]> {
+    const all = await (await getDb()).getAll('playerMatchStats');
+    return all.filter(s => s.season === season);
+  },
 };
 
 // ─── StandingsRepository ──────────────────────────────────────────────────────

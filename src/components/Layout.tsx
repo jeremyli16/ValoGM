@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics' | 'stats';
 
 interface Props {
   state: GameState;
@@ -17,6 +17,7 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
   { id: 'transfers',  label: 'Market' },
   { id: 'finances',   label: 'Finances' },
   { id: 'tactics',    label: 'Tactics' },
+  { id: 'stats',      label: 'Stats' },
   { id: 'matchday',   label: 'Matches' },
   { id: 'standings',  label: 'Standings' },
   { id: 'schedule',   label: 'Schedule' },

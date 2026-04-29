@@ -14,9 +14,10 @@ import { Playoffs } from './components/screens/Playoffs';
 import { LeagueHistory } from './components/screens/LeagueHistory';
 import { Finances } from './components/screens/Finances';
 import { Tactics } from './components/screens/Tactics';
+import { Stats } from './components/screens/Stats';
 import { Layout } from './components/Layout';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics' | 'stats';
 
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -207,6 +208,7 @@ export function App() {
         {nav === 'history'    && <LeagueHistory state={gameState} />}
         {nav === 'finances'   && <Finances state={gameState} onSubmitRenewal={handleSubmitRenewal} />}
         {nav === 'tactics'    && <Tactics state={gameState} onSetPracticeAllocation={handleSetPracticeAllocation} onSetMapComp={handleSetMapComp} />}
+        {nav === 'stats'      && <Stats state={gameState} />}
       </Layout>
 
       {importViolators.length > 0 && (
