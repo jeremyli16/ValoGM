@@ -102,8 +102,10 @@ export function Dashboard({ state }: Props) {
 
   const standingsRow = state.standings.get(`${state.leagueId}:${state.season}:${state.playerTeamId}`);
 
-  const rosterPlayers = (team?.rosterIds ?? []).map(id => state.players.get(id)).filter(Boolean);
-  const benchPlayers = (team?.subIds ?? []).map(id => state.players.get(id)).filter(Boolean);
+  const ROLE_ORDER = { duelist: 0, initiator: 1, controller: 2, sentinel: 3 } as const;
+  const byRole = (a: any, b: any) => ROLE_ORDER[a.primaryRole as keyof typeof ROLE_ORDER] - ROLE_ORDER[b.primaryRole as keyof typeof ROLE_ORDER];
+  const rosterPlayers = (team?.rosterIds ?? []).map(id => state.players.get(id)).filter(Boolean).sort(byRole);
+  const benchPlayers = (team?.subIds ?? []).map(id => state.players.get(id)).filter(Boolean).sort(byRole);
   const payroll =
     rosterPlayers.reduce((s, p) => s + (p?.salary ?? 0), 0) +
     benchPlayers.reduce((s, p) => s + (p?.salary ?? 0) * BENCH_SALARY_FACTOR, 0);

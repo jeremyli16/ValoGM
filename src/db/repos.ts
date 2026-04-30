@@ -260,18 +260,27 @@ export async function persistGameState(state: GameState): Promise<void> {
     state.dirtyPlayers.clear();
   }
 
-  // 3. Dirty matches + their player stats
+  // 3. Dirty matches + their player stats (regular season + playoff bracket)
   if (state.dirtyMatches.size > 0) {
     const dirty: ScheduledMatch[] = [];
     const statsToWrite: (PlayerMatchStat & { id: string; season: number })[] = [];
     state.dirtyMatches.forEach(id => {
       const m = state.matches.get(id);
-      if (!m) return;
-      dirty.push(m);
-      if (m.result?.playerStats) {
-        m.result.playerStats.forEach(s => {
-          statsToWrite.push({ ...s, id: `${m.id}_${s.playerId}`, season: m.season, isPlayoff: m.isPlayoff });
-        });
+      if (m) {
+        dirty.push(m);
+        if (m.result?.playerStats) {
+          m.result.playerStats.forEach(s => {
+            statsToWrite.push({ ...s, id: `${m.id}_${s.playerId}`, season: m.season, isPlayoff: m.isPlayoff });
+          });
+        }
+      } else {
+        // Playoff bracket matches are not in state.matches — look up from bracket
+        const pm = state.playoffBracket?.matches.find(bm => bm.id === id);
+        if (pm?.result?.playerStats) {
+          pm.result.playerStats.forEach(s => {
+            statsToWrite.push({ ...s, id: `${pm.id}_${s.playerId}`, season: state.season, isPlayoff: true });
+          });
+        }
       }
     });
     await matchRepo.putMany(dirty);

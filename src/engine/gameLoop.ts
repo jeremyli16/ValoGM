@@ -621,6 +621,7 @@ function simPlayoffStage(state: GameState): GameState {
     }
 
     match.result = result;
+    state.dirtyMatches.add(match.id);
 
     if (match.feedsWinnerTo) {
       const next = bracket.matches.find(m => m.id === match.feedsWinnerTo);

@@ -269,11 +269,13 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
 
   const team = state.teams.get(state.playerTeamId);
   const starterIds = new Set(team?.rosterIds ?? []);
-  const starters = [...starterIds].map(id => state.players.get(id)).filter(Boolean) as Player[];
-  const subs = (team?.subIds ?? [])
+  const ROLE_ORDER = { duelist: 0, initiator: 1, controller: 2, sentinel: 3 } as const;
+  const byRole = (a: Player, b: Player) => ROLE_ORDER[a.primaryRole] - ROLE_ORDER[b.primaryRole];
+  const starters = ([...starterIds].map(id => state.players.get(id)).filter(Boolean) as Player[]).sort(byRole);
+  const subs = ((team?.subIds ?? [])
     .filter(id => !starterIds.has(id))
     .map(id => state.players.get(id))
-    .filter(Boolean) as Player[];
+    .filter(Boolean) as Player[]).sort(byRole);
   const listed = tab === 'starters' ? starters : subs;
 
   const coachEntries: { coach: Coach; role: 'head' | 'assistant' }[] = [];
