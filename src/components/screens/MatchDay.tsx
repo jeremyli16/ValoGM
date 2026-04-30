@@ -116,31 +116,82 @@ function ScoreDisplay({ resultA, resultB, mapName }: { resultA: number; resultB:
   );
 }
 
-function RoundTimeline({ rounds, playerIsA }: { rounds: RoundResultSummary[]; playerIsA: boolean }) {
+function RoundTimeline({ rounds, playerIsA, playerTeamName, oppTeamName }: {
+  rounds: RoundResultSummary[];
+  playerIsA: boolean;
+  playerTeamName: string;
+  oppTeamName: string;
+}) {
+  const firstHalf  = rounds.filter(r => r.roundNum <= 12);
+  const secondHalf = rounds.filter(r => r.roundNum > 12 && r.roundNum <= 24);
+  const overtime   = rounds.filter(r => r.roundNum > 24);
+
+  function playerWonRound(r: RoundResultSummary): boolean {
+    const attackSide = r.attackSide ?? (r.roundNum <= 12 ? 'A' : 'B');
+    const aWon = attackSide === 'A' ? r.winner === 'attack' : r.winner === 'defense';
+    return playerIsA ? aWon : !aWon;
+  }
+
+  const CELL: React.CSSProperties = { width: 20, height: 15, borderRadius: 2, flexShrink: 0 };
+  const DIM = 'rgba(255,255,255,0.07)';
+
+  const renderGroup = (group: RoundResultSummary[]) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {group.map(r => (
+          <div key={r.roundNum} style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
+            <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{r.roundNum}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {group.map(r => {
+          const pw = playerWonRound(r);
+          return <div key={r.roundNum} style={{ ...CELL, background: pw ? 'var(--teal)' : DIM }} />;
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {group.map(r => {
+          const pw = playerWonRound(r);
+          return <div key={r.roundNum} style={{ ...CELL, background: !pw ? 'var(--red)' : DIM }} />;
+        })}
+      </div>
+    </div>
+  );
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.05em',
+    textTransform: 'uppercase', height: 15, display: 'flex', alignItems: 'center',
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 72,
+  };
+
   return (
-    <div className="flex flex-wrap gap-1" style={{ padding: '8px 0' }}>
-      {rounds.map(r => {
-        const playerWon = playerIsA ? r.winner === 'attack' : r.winner === 'defense';
-        return (
-          <div
-            key={r.roundNum}
-            title={`Round ${r.roundNum} — ${r.winner} wins${r.planted ? ' (planted)' : ''}`}
-            style={{
-              width: 14, height: 14,
-              background: playerWon ? 'var(--teal)' : 'var(--red)',
-              opacity: r.planted ? 1 : 0.7,
-              borderRadius: 2,
-              cursor: 'default',
-            }}
-          />
-        );
-      })}
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 14, paddingRight: 4 }}>
+        <div style={{ ...labelStyle, color: 'var(--teal)' }}>{playerTeamName}</div>
+        <div style={{ ...labelStyle, color: 'var(--red)' }}>{oppTeamName}</div>
+      </div>
+      {renderGroup(firstHalf)}
+      {secondHalf.length > 0 && (
+        <>
+          <div style={{ width: 6 }} />
+          {renderGroup(secondHalf)}
+        </>
+      )}
+      {overtime.length > 0 && (
+        <>
+          <div style={{ width: 6, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: 1, height: '100%', background: 'var(--amber)', opacity: 0.4, margin: '0 auto' }} />
+          </div>
+          {renderGroup(overtime)}
+        </>
+      )}
     </div>
   );
 }
 
 function PlayerStatRow({ stat, alias }: {
-  stat: { playerId: string; kills: number; deaths: number; assists: number; adr: number; rating: number };
+  stat: { playerId: string; kills: number; deaths: number; assists: number; adr: number; acs?: number; rating: number };
   alias: string;
 }) {
   const kd = stat.deaths === 0 ? stat.kills : (stat.kills / stat.deaths).toFixed(2);
@@ -151,6 +202,7 @@ function PlayerStatRow({ stat, alias }: {
       <td className="font-mono">{stat.deaths}</td>
       <td className="font-mono">{stat.assists}</td>
       <td className="font-mono">{kd}</td>
+      <td className="font-mono">{stat.acs ?? '—'}</td>
       <td className="font-mono">{stat.adr}</td>
       <td className="font-mono" style={{ color: stat.rating >= 1.2 ? 'var(--teal)' : stat.rating < 0.8 ? 'var(--red)' : 'var(--text-primary)' }}>
         {stat.rating.toFixed(2)}
@@ -194,7 +246,7 @@ function MatchDetail({ match, state }: { match: NormMatch; state: GameState }) {
         <span className="font-head bold" style={{ fontSize: 16, color: playerWon ? 'var(--teal)' : 'var(--red)' }}>
           {playerWon ? '▲ VICTORY' : '▼ DEFEAT'}
         </span>
-        {mvp && <span className="text-dim text-xs" style={{ marginLeft: 12 }}>MVP: {mvp.alias}</span>}
+        {mvp && <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--text-primary)', opacity: 0.85 }}>MVP: {mvp.alias}</span>}
       </div>
 
       {/* Map scores */}
@@ -208,7 +260,7 @@ function MatchDetail({ match, state }: { match: NormMatch; state: GameState }) {
       {result.mapResults.map((m, i) => (
         <div key={i}>
           <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 4 }}>{m.mapName} Round Timeline</div>
-          <RoundTimeline rounds={m.roundResults} playerIsA={isA} />
+          <RoundTimeline rounds={m.roundResults} playerIsA={isA} playerTeamName={isA ? (teamA?.name ?? 'Us') : (teamB?.name ?? 'Us')} oppTeamName={isA ? (teamB?.name ?? 'Opp') : (teamA?.name ?? 'Opp')} />
         </div>
       ))}
 
@@ -233,7 +285,7 @@ function MatchDetail({ match, state }: { match: NormMatch; state: GameState }) {
               </div>
               <table className="data-table" style={{ marginBottom: 12 }}>
                 <thead>
-                  <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ADR</th><th>Rating</th></tr>
+                  <tr><th>Player</th><th>K</th><th>D</th><th>A</th><th>K/D</th><th>ACS</th><th>ADR</th><th>Rating</th></tr>
                 </thead>
                 <tbody>
                   {teamStats
@@ -339,7 +391,7 @@ export function MatchDay({ state }: Props) {
                       }}
                     >
                       <div style={{ fontFamily: 'var(--font-head)', fontSize: 11, color: won ? 'var(--teal)' : 'var(--red)' }}>
-                        {won ? 'W' : 'L'} {m.result.winsA}–{m.result.winsB}
+                        {won ? 'W' : 'L'} {isA ? m.result.winsA : m.result.winsB}–{isA ? m.result.winsB : m.result.winsA}
                       </div>
                       <div style={{ fontSize: 12 }}>vs {opp?.name ?? '?'}</div>
                       <div className="text-dim" style={{ fontSize: 11 }}>{m.label} · {m.format.toUpperCase()}</div>

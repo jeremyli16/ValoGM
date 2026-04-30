@@ -194,6 +194,7 @@ export interface RoundResultSummary {
   planted: boolean;
   buyTypeA: BuyType;
   buyTypeB: BuyType;
+  attackSide: 'A' | 'B';
 }
 
 export interface MatchResult {

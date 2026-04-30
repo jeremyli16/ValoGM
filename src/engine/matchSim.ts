@@ -367,33 +367,40 @@ function simOvertimeRounds(
   lastAttackSide: 'A' | 'B',
   mapBias: number,
   rng: SeededRng
-): { otA: number; otB: number } {
+): { otA: number; otB: number; rounds: RoundResultSummary[] } {
   // Team that was defending at end of regulation attacks first in OT.
   let otAttackSide: 'A' | 'B' = lastAttackSide === 'A' ? 'B' : 'A';
   let otA = 0, otB = 0;
+  let roundNum = 25;
+  const rounds: RoundResultSummary[] = [];
   const freshEcon = (): PlayerEconomy[] =>
     [0, 1, 2, 3, 4].map(j => ({ playerId: `ot${j}`, credits: 5000 }));
 
   for (let set = 0; set < 20; set++) {
-    // 2 rounds per OT set, sides swap after each round within the set.
     for (let r = 0; r < 2; r++) {
       const atk = otAttackSide === 'A' ? teamAPlayers : teamBPlayers;
       const def = otAttackSide === 'A' ? teamBPlayers : teamAPlayers;
       const result = simRound(atk, def, freshEcon(), freshEcon(), 0, 0, 99, null, null, mapBias, true, rng);
       const aWon = (otAttackSide === 'A') === (result.winner === 'attack');
       if (aWon) otA++; else otB++;
+      rounds.push({
+        roundNum: roundNum++,
+        winner: result.winner,
+        planted: result.planted,
+        buyTypeA: otAttackSide === 'A' ? result.atkBuyType : result.defBuyType,
+        buyTypeB: otAttackSide === 'A' ? result.defBuyType : result.atkBuyType,
+        attackSide: otAttackSide,
+      });
       otAttackSide = otAttackSide === 'A' ? 'B' : 'A';
     }
-    // After 2 rounds, otAttackSide has been swapped twice → back to set start.
     if (Math.abs(otA - otB) >= 2) break;
   }
 
-  // Safety: force resolution if somehow still tied after all sets.
   if (Math.abs(otA - otB) < 2) {
     if (rng() < 0.5) otA += 2; else otB += 2;
   }
 
-  return { otA, otB };
+  return { otA, otB, rounds };
 }
 
 // ─── Map Simulation ───────────────────────────────────────────────────────────
@@ -539,13 +546,15 @@ function simMap(
       planted: result.planted,
       buyTypeA: attackSide === 'A' ? result.atkBuyType : result.defBuyType,
       buyTypeB: attackSide === 'A' ? result.defBuyType : result.atkBuyType,
+      attackSide,
     });
   }
 
   if (scoreA === 12 && scoreB === 12) {
-    const { otA, otB } = simOvertimeRounds(localA, localB, attackSide, mapBias, rng);
+    const { otA, otB, rounds: otRounds } = simOvertimeRounds(localA, localB, attackSide, mapBias, rng);
     scoreA += otA;
     scoreB += otB;
+    roundResults.push(...otRounds);
   }
 
   // Accumulate this map's stats into the series totals.

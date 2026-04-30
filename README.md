@@ -26,12 +26,13 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Win/loss record, standings position, points
 - Budget and payroll summary (starters at full salary, bench players at 50%)
 - Next scheduled match preview
-- Active roster with morale indicators
+- Active roster sorted by role (Duelist → Initiator → Controller → Sentinel) with morale indicators
 - Notification inbox (match results, contract alerts, transfer responses)
 
 **Roster**
 - Tabbed view: Starters (5) vs. Substitutes (0 or more — teams are not required to carry bench players)
-- Player detail panel: base stats (Aim, Game Sense, Clutch, Communication, Adaptability, Morale), role ratings with scout confidence, season averages (K/D/A, ADR, Rating) fetched live from IndexedDB, salary, main agent
+- Players sorted by role within each tab
+- Player detail panel: base stats (Aim, Game Sense, Clutch, Communication, Adaptability, Morale), role ratings with scout confidence, season averages (K/D/A, ADR, ACS, Rating) fetched live from IndexedDB, salary, main agent
 - Move players between starting lineup and bench; auto-fill vacant starter slots from bench then free agents, role-prioritized then by skill
 - Import rule enforcement: max 1 non-home-region player in starting lineup; popup warning blocks week advancement if violated
 - Release player: two-step confirm in the detail panel; released players have their contract terminated, become free agents, and require no buyout fee when signing with a new team
@@ -59,8 +60,18 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Team slots show seed, name, and series score; player team highlighted in red; eliminated teams dimmed
 
 **Match Day**
-- Match history list with W/L indicators
-- Per-match detail: series score, win/loss banner with MVP, map scores, round timeline, full player stats split by team (your team first, sorted by rating)
+- Match history grouped by split (Season N · Split N headers), collapsible; most recent split open by default
+- Score display always shows player's wins first (e.g. W 2–1, never L 0–2 for a win)
+- Per-match detail: series score, win/loss banner with MVP, map scores
+- **Round timeline:** two-row colored layout — player team row (teal = round win, dim = loss) and opponent row (red = round win, dim = loss); regulation split into first half (rounds 1–12) and second half (13–24); overtime rounds (25+) displayed in a separate group separated by an amber divider with correct per-round attack-side tracking
+- Full player stats split by team (your team first, sorted by rating): K, D, A, K/D, ACS, ADR, Rating
+
+**Stats**
+- League-wide player stat leaderboard aggregated from IndexedDB
+- **Filter system:** season (calendar year), split (1/2/3/All), phase (All / Regular Season / Playoffs), role, team
+- **Columns:** Player, Team, Maps, Rounds, K, D, A, K/D, ACS, ADR, Rating — all sortable
+- Stats aggregated correctly: totals summed across maps, per-map averages (ACS/ADR/Rating) weighted by maps played
+- Defaults to current calendar season, all splits, all phases
 
 **Finances**
 - Contract list for all rostered players: salary, calendar years remaining, expiry status (active / expiring / expired)
@@ -91,13 +102,15 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **Map-specific attack/defense bias** sourced from VLR.gg pro-play data: Split −0.03, Pearl −0.02, Bind +0.01, Haven +0.02, Fracture +0.02, Abyss +0.02, Ascent +0.03; bias shifts the per-round win probability of each round played on that map
 - **Clutch mechanic:** when one player faces two or more opponents mid-round, a separate clutch check fires — 1v2 ≈ 28%, 1v3 ≈ 12%, 1v4 ≈ 5%, 1v5 ≈ 2% base rate (sourced from VLR.gg), scaled by the clutch player's Clutch stat (×0.7–1.3); success credits the clutch player with all remaining kills; failure on a non-match-point round results in a weapon save (player escapes)
 - **Weapon saves:** losing-side survivor who fails a clutch check saves their rifle for the next round (does not die, no kill credited), unless it is match point — on match point all players fight to the death
-- **Overtime (MR2 per set):** proper double-round sets matching real Valorant OT; each set is two rounds with an intra-set side swap; a team wins the map only by winning both rounds in a set (leading by 2 overall); if 1–1 in a set, another set starts with the same attack side
-- **Realistic stat generation:** each round death produces exactly one kill credited to a role+skill-weighted opponent; survivors selected by role+skill probability; damage includes chip damage ensuring all players accumulate ADR even without kills — K/D ratios match pro play (0.7–2.0 range)
-- **ACS-based rating:** per-round Average Combat Score uses the real Valorant formula — raw damage dealt, plus kill points by enemies-alive tier (150/130/110/90/70), plus multi-kill bonuses (+50 per extra kill, +200 ace), plus non-damaging assists ×25; normalised to ~1.0 for an average player
+- **Overtime (MR2 per set):** proper double-round sets matching real Valorant OT; each set is two rounds with an intra-set side swap; a team wins the map only by winning both rounds in a set (leading by 2 overall); if 1–1 in a set, another set starts with the same attack side; OT rounds are numbered 25+ and tracked individually for the round timeline
+- **Death-coupled kill assignment:** each player death generates exactly one kill credited to a skill+role-weighted opponent; survivors selected by the same weighted probability — guarantees total kills = total deaths per round, matching real Valorant
+- **Damage separation:** kill damage and chip damage tracked separately; ACS accumulates chip damage + kill points only (matching the real ACS formula); ADR uses total damage including kills — allows independent calibration of ACS and ADR
+- **Realistic stat targets:** K/D ratios in the 0.7–2.0 range (average ≈ 1.0); ACS average ≈ 200–210 with top fraggers reaching 240–250; ADR average ≈ 130; all calibrated against VLR.gg pro-play data
+- **VLR Rating 2.0 (ML-derived):** rating formula uses feature importances from a machine-learning model fit against real VLR.gg rating data — `KPR×0.6332 + DPR×0.2179 + KAST×0.0862 + FDPR×0.0281 + APR×0.0182 + ADRa×0.0136 + FKPR×0.0027`, clamped to [0, 3]; KAST/FDPR/FKPR approximated from available stats with matched baselines so their contribution is proportional to deviation from the pro average
 - **Real map veto:** bo1 = alternating bans until 1 map remains; bo3 = A ban → B ban → A pick → B pick → A ban → B ban → decider; bo5 = 2 bans then alternating picks + decider; teams ban the opponent's strongest map and pick their own strongest map
 - **12-map universe with 7-map active rotation:** full pool is Ascent, Bind, Haven, Split, Fracture, Pearl, Lotus, Sunset, Abyss, Icebox, Breeze, Corrode; only 7 are active at any time (`GameState.activeMapPool`); veto and match simulation use the active pool only
 - **Per-split map rotation:** at each new split, the pool may rotate — 60% chance no change, 30% chance 1 map swaps out, 10% chance 2 maps swap out; incoming maps are drawn from the reserve; a "Map Pool Update" notification names what was added and removed; seeded per-game so rotation history is deterministic and reproducible
-- Per-match stats (K/D/A, ADR, Rating) written to IndexedDB after each simulated match and fetched per season for display
+- Per-match stats (K/D/A, ACS, ADR, Rating, maps played, isPlayoff) written to IndexedDB after each simulated match — both regular season and playoff matches
 - **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
 **Player Generation**
@@ -140,8 +153,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - All offers are persisted immediately; responses arrive on the next week advance
 
 **Persistence**
-- IndexedDB schema (v2) with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, coaches, transfer offers, and player match stats
-- `playerMatchStats` records keyed `{matchId}_{playerId}` store per-player K/D/A, ADR, and rating with a `season` field; written alongside match results in the dirty-match flush
+- IndexedDB schema with repositories for players, teams, orgs, leagues, matches, contracts, standings, notifications, role ratings, coaches, transfer offers, and player match stats
+- `playerMatchStats` records keyed `{matchId}_{playerId}` store per-player K/D/A, ACS, ADR, and rating with `season`, `maps`, and `isPlayoff` fields
+- Playoff match stats persist correctly — playoff matches live in `state.playoffBracket.matches` (separate from `state.matches`); the dirty-match flush checks both structures
 - Teams written on every persist cycle (ensures roster/morale/record changes survive a reload)
 - Dirty-flag system for players, matches, and coaches; transfer offers are fully upserted each cycle
 - Full save/load reconstructs all `Map<>` structures from stored arrays
@@ -170,10 +184,3 @@ Per-season player stats are written to IndexedDB and survive reloads within the 
 
 ### Challengers League
 Eight challengers teams are generated and assigned rosters at game start. They do not have a schedule, standings, or playoff bracket. There is no promotion/relegation mechanic between Challengers and Partnership tiers.
-
-### Separate Stats Screen
-Season stats are currently shown inline (per-match in the Schedule, season averages in the Roster detail panel). A dedicated stats leaderboard would require:
-- A league-wide stat aggregation pass over `state.matches`
-- Sortable leaderboard tables (by rating, ADR, K/D) across all teams
-- Per-player match-by-match history view (match ID is already stored on each `PlayerMatchStat`)
-- Historical data surviving season transitions (requires offseason archival first)
