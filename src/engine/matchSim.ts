@@ -635,32 +635,61 @@ function resolveMapVeto(
 
 // ─── Series Simulation ────────────────────────────────────────────────────────
 
-// VLR Rating 2.0 approximation.
-// Components: ACS-based kill contribution, death penalty, reduced assists, ADRa.
-// Calibrated so an average pro (KPR≈0.75, DPR≈0.75, APR≈0.30, ADR≈130) → 1.00.
+// VLR Rating 2.0 — exact ML feature importances:
+// KPR 0.633230 · DPR 0.217906 · KAST 0.086228 · FDPR 0.028113 · APR 0.018241
+// ADRa 0.013581 · FKPR 0.002702
+// KAST, FDPR, FKPR not tracked per-round — approximated from available stats.
+// Each component normalized to sim average so average player ≈ 1.00.
 function computePlayerStats(
   matchId: string,
   statesA: PlayerState[],
   statesB: PlayerState[],
   totalRounds: number
 ): PlayerMatchStat[] {
+  // Sim-calibrated baselines (kill/death coupling + chip damage model)
+  const KPR_BASE  = 0.65;
+  const DPR_BASE  = 0.65;
+  const APR_BASE  = 0.25;
+  const ADRA_BASE = 40;
+  const KAST_BASE = KPR_BASE * 0.5 + APR_BASE * 0.15 + 0.3; // ≈ 0.6625
+  const FDPR_BASE = DPR_BASE * 0.12;                         // ≈ 0.0780
+  const FKPR_BASE = KPR_BASE * 0.18;                         // ≈ 0.1170
+
   return [...statesA, ...statesB].map(s => {
-    const r = Math.max(1, totalRounds);
-    const adr = s.roundDamage / r;
-    const acsPerRound = s.acs / r;
-    const dpr = s.deaths / r;
-    const apr = s.assists / r;
-    // ADRa: damage not already accounted for by kills (avg ~130 dmg/kill)
-    const adraNorm = Math.max(0, s.roundDamage - s.kills * 130) / r / 32;
+    const r    = Math.max(1, totalRounds);
+    const adr  = s.roundDamage / r;
+    const kpr  = s.kills   / r;
+    const dpr  = s.deaths  / r;
+    const apr  = s.assists / r;
+    const adra = Math.max(0, s.roundDamage - s.kills * 130) / r;
+
+    // KAST: rounds with kill/assist/survived/traded — proxy via kpr + apr
+    const kastApprox = clamp(kpr * 0.5 + apr * 0.15 + 0.3, 0.30, 0.95);
+    // FDPR: first-death rate ≈ 12% of overall death rate (entry-fragger correlation)
+    const fdprApprox = dpr * 0.12;
+    // FKPR: first-kill rate ≈ 18% of overall kill rate (entry-fragger correlation)
+    const fkprApprox = kpr * 0.18;
+
+    // Negative features (dpr, fdpr) inverted: fewer deaths → higher score
+    const kprScore  = kpr  / KPR_BASE;
+    const dprScore  = DPR_BASE / Math.max(dpr, 0.20);
+    const aprScore  = apr  / APR_BASE;
+    const adraScore = adra / ADRA_BASE;
+    const kastScore = kastApprox / KAST_BASE;
+    const fdprScore = FDPR_BASE  / Math.max(fdprApprox, 0.02);
+    const fkprScore = fkprApprox / FKPR_BASE;
 
     const rating = clamp(
-      (acsPerRound / 250) * 0.60
-      - (dpr / 0.75) * 0.24
-      + (apr / 0.30) * 0.10
-      + adraNorm * 0.10
-      + 0.44,
+      kprScore  * 0.633230407542
+      + dprScore  * 0.217905601906
+      + kastScore * 0.086227879298
+      + fdprScore * 0.028112795114
+      + aprScore  * 0.018240600302
+      + adraScore * 0.013580501165
+      + fkprScore * 0.002702214674,
       0, 3
     );
+
     return {
       playerId: s.id,
       matchId,
@@ -668,7 +697,7 @@ function computePlayerStats(
       deaths:  s.deaths,
       assists: s.assists,
       adr:     Math.round(adr),
-      acs:     Math.round(acsPerRound),
+      acs:     Math.round(s.acs / r),
       rounds:  totalRounds,
       rating:  Math.round(rating * 100) / 100,
     };
