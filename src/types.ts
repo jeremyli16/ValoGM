@@ -214,6 +214,8 @@ export interface PlayerMatchStat {
   adr: number;
   acs: number;
   rounds: number;
+  maps: number;
+  isPlayoff: boolean;
   rating: number;
 }
 

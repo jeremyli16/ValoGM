@@ -170,15 +170,17 @@ function pickSurvivorIndices(
 
 // ─── ACS Computation ─────────────────────────────────────────────────────────
 
-// Kill-point values by enemies-alive-at-time-of-kill (index = kill number, 0-based).
-// First kill: 5 enemies alive → 150 pts, second: 4 alive → 130 pts, etc.
+// Real Valorant kill bonus values (based on enemies alive when kill lands).
+// ACS = nonKillDamage + killPts + multiKillBonus + assists*25.
+// Kill damage is NOT added again — it's already captured in the kill bonus score.
+// Chip damage (non-kill hits) is the only damage component added to ACS.
 const KILL_POINTS = [150, 130, 110, 90, 70];
 
-function computeRoundACS(kills: number, damage: number, assists: number): number {
+function computeRoundACS(kills: number, chipDamage: number, assists: number): number {
   let killPts = 0;
   for (let i = 0; i < Math.min(kills, 5); i++) killPts += KILL_POINTS[i];
   const multiKillBonus = Math.max(0, kills - 1) * 50 + (kills >= 5 ? 200 : 0);
-  return damage + killPts + multiKillBonus + assists * 25;
+  return chipDamage + killPts + multiKillBonus + assists * 25;
 }
 
 // ─── Round Stats Generation ───────────────────────────────────────────────────
@@ -188,7 +190,8 @@ interface RoundOutcome {
   kills: number;
   assists: number;
   planted: boolean;
-  damage: number;
+  damage: number;     // total damage (kill + chip) — used for ADR
+  chipDamage: number; // non-kill damage only — used for ACS
 }
 
 function generateRoundStats(
@@ -200,10 +203,10 @@ function generateRoundStats(
   rng: SeededRng
 ): { attackerOutcomes: RoundOutcome[]; defenderOutcomes: RoundOutcome[] } {
   const attackerOutcomes: RoundOutcome[] = attackers.map(() => ({
-    survived: false, kills: 0, assists: 0, planted, damage: 0,
+    survived: false, kills: 0, assists: 0, planted, damage: 0, chipDamage: 0,
   }));
   const defenderOutcomes: RoundOutcome[] = defenders.map(() => ({
-    survived: false, kills: 0, assists: 0, planted: false, damage: 0,
+    survived: false, kills: 0, assists: 0, planted: false, damage: 0, chipDamage: 0,
   }));
 
   const winners = attackerWins ? attackers : defenders;
@@ -272,16 +275,21 @@ function generateRoundStats(
     });
   }
 
-  // Step 5: Damage — kill damage + chip damage for every player
+  // Step 5: Damage split into kill damage (for ADR) and chip damage (for ACS).
+  // Kill dmg ≈ 80/kill avg; chip ≈ 80/round avg.
+  // Targets: ADR ≈ 140 (60 kill + 80 chip), ACS ≈ 205 avg with top players reaching 240-250.
   ;[...attackerOutcomes, ...defenderOutcomes].forEach(o => {
-    o.damage = o.kills * randInt(rng, 100, 150) + randInt(rng, 10, 80);
+    const chip = randInt(rng, 40, 120);
+    o.chipDamage = chip;
+    o.damage = o.kills * randInt(rng, 60, 100) + chip;
   });
 
-  // Step 6: Assists — 60% chance per kill to give a random teammate an assist
+  // Step 6: Assists — 30% chance per kill to give a random teammate an assist.
+  // 60% was producing APR≈0.56 vs real pro average ≈0.28; halved to match.
   ;[attackerOutcomes, defenderOutcomes].forEach(outcomes => {
     outcomes.forEach((o, i) => {
       for (let k = 0; k < o.kills; k++) {
-        if (rng() < 0.6) {
+        if (rng() < 0.30) {
           const candidates = [0, 1, 2, 3, 4].filter(x => x !== i);
           outcomes[candidates[Math.floor(rng() * candidates.length)]].assists++;
         }
@@ -511,18 +519,18 @@ function simMap(
     });
 
     atk.forEach((s, i) => {
-      s.kills      += atkOutcomes[i].kills;
-      s.assists    += atkOutcomes[i].assists;
+      s.kills       += atkOutcomes[i].kills;
+      s.assists     += atkOutcomes[i].assists;
       s.roundDamage += atkOutcomes[i].damage;
       if (!atkOutcomes[i].survived) s.deaths++;
-      s.acs += computeRoundACS(atkOutcomes[i].kills, atkOutcomes[i].damage, atkOutcomes[i].assists);
+      s.acs += computeRoundACS(atkOutcomes[i].kills, atkOutcomes[i].chipDamage, atkOutcomes[i].assists);
     });
     def.forEach((s, i) => {
-      s.kills      += defOutcomes[i].kills;
-      s.assists    += defOutcomes[i].assists;
+      s.kills       += defOutcomes[i].kills;
+      s.assists     += defOutcomes[i].assists;
       s.roundDamage += defOutcomes[i].damage;
       if (!defOutcomes[i].survived) s.deaths++;
-      s.acs += computeRoundACS(defOutcomes[i].kills, defOutcomes[i].damage, defOutcomes[i].assists);
+      s.acs += computeRoundACS(defOutcomes[i].kills, defOutcomes[i].chipDamage, defOutcomes[i].assists);
     });
 
     roundResults.push({
@@ -639,21 +647,24 @@ function resolveMapVeto(
 // KPR 0.633230 · DPR 0.217906 · KAST 0.086228 · FDPR 0.028113 · APR 0.018241
 // ADRa 0.013581 · FKPR 0.002702
 // KAST, FDPR, FKPR not tracked per-round — approximated from available stats.
-// Each component normalized to sim average so average player ≈ 1.00.
+// Baselines derived from sim averages: 7.5 deaths/round across 10 players → KPR=DPR=0.75;
+// assists at 30% per kill distributed among 4 teammates → APR≈0.28.
+// Average player produces exactly 1.00; top players ≈ 1.15–1.25.
 function computePlayerStats(
   matchId: string,
   statesA: PlayerState[],
   statesB: PlayerState[],
-  totalRounds: number
+  totalRounds: number,
+  mapsPlayed: number,
+  isPlayoff: boolean,
 ): PlayerMatchStat[] {
-  // Sim-calibrated baselines (kill/death coupling + chip damage model)
-  const KPR_BASE  = 0.65;
-  const DPR_BASE  = 0.65;
-  const APR_BASE  = 0.25;
-  const ADRA_BASE = 40;
-  const KAST_BASE = KPR_BASE * 0.5 + APR_BASE * 0.15 + 0.3; // ≈ 0.6625
-  const FDPR_BASE = DPR_BASE * 0.12;                         // ≈ 0.0780
-  const FKPR_BASE = KPR_BASE * 0.18;                         // ≈ 0.1170
+  const KPR_BASE  = 0.75;
+  const DPR_BASE  = 0.75;
+  const APR_BASE  = 0.28;
+  const ADRA_BASE = 43; // ADR≈140 − KPR×130 ≈ 140 − 97.5 = 42.5
+  const KAST_BASE = KPR_BASE * 0.5 + APR_BASE * 0.15 + 0.3; // ≈ 0.717
+  const FDPR_BASE = DPR_BASE * 0.12;                         // ≈ 0.090
+  const FKPR_BASE = KPR_BASE * 0.18;                         // ≈ 0.135
 
   return [...statesA, ...statesB].map(s => {
     const r    = Math.max(1, totalRounds);
@@ -663,14 +674,10 @@ function computePlayerStats(
     const apr  = s.assists / r;
     const adra = Math.max(0, s.roundDamage - s.kills * 130) / r;
 
-    // KAST: rounds with kill/assist/survived/traded — proxy via kpr + apr
     const kastApprox = clamp(kpr * 0.5 + apr * 0.15 + 0.3, 0.30, 0.95);
-    // FDPR: first-death rate ≈ 12% of overall death rate (entry-fragger correlation)
     const fdprApprox = dpr * 0.12;
-    // FKPR: first-kill rate ≈ 18% of overall kill rate (entry-fragger correlation)
     const fkprApprox = kpr * 0.18;
 
-    // Negative features (dpr, fdpr) inverted: fewer deaths → higher score
     const kprScore  = kpr  / KPR_BASE;
     const dprScore  = DPR_BASE / Math.max(dpr, 0.20);
     const aprScore  = apr  / APR_BASE;
@@ -693,13 +700,15 @@ function computePlayerStats(
     return {
       playerId: s.id,
       matchId,
-      kills:   s.kills,
-      deaths:  s.deaths,
-      assists: s.assists,
-      adr:     Math.round(adr),
-      acs:     Math.round(s.acs / r),
-      rounds:  totalRounds,
-      rating:  Math.round(rating * 100) / 100,
+      kills:     s.kills,
+      deaths:    s.deaths,
+      assists:   s.assists,
+      adr:       Math.round(adr),
+      acs:       Math.round(s.acs / r),
+      rounds:    totalRounds,
+      maps:      mapsPlayed,
+      isPlayoff,
+      rating:    Math.round(rating * 100) / 100,
     };
   });
 }
@@ -719,6 +728,7 @@ export function simMatch(
   coachTacticsB = 0,
   agentMeta: Record<string, number> = {},
   agentMapMeta: Record<string, Record<string, number>> = {},
+  isPlayoff = false,
 ): MatchResult {
   const maps = resolveMapVeto(teamA, teamB, format, activeMapPool, rng);
   const needed = { bo1: 1, bo3: 2, bo5: 3 }[format];
@@ -764,7 +774,7 @@ export function simMatch(
     if (mapResult.winner === 'A') winsA++; else winsB++;
   }
 
-  const playerStats = computePlayerStats(matchId, allStatesA, allStatesB, totalRounds);
+  const playerStats = computePlayerStats(matchId, allStatesA, allStatesB, totalRounds, mapResults.length, isPlayoff);
 
   const winner = winsA > winsB ? 'A' : 'B';
   const winnerIds = (winner === 'A' ? playersA : playersB).map(p => p.id);

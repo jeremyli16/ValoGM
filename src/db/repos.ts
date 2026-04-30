@@ -146,6 +146,9 @@ export const playerMatchStatsRepo = {
     const all = await (await getDb()).getAll('playerMatchStats');
     return all.filter(s => s.season === season);
   },
+  async getAll(): Promise<(PlayerMatchStat & { id: string; season: number })[]> {
+    return (await getDb()).getAll('playerMatchStats');
+  },
 };
 
 // ─── StandingsRepository ──────────────────────────────────────────────────────
@@ -267,7 +270,7 @@ export async function persistGameState(state: GameState): Promise<void> {
       dirty.push(m);
       if (m.result?.playerStats) {
         m.result.playerStats.forEach(s => {
-          statsToWrite.push({ ...s, id: `${m.id}_${s.playerId}`, season: m.season });
+          statsToWrite.push({ ...s, id: `${m.id}_${s.playerId}`, season: m.season, isPlayoff: m.isPlayoff });
         });
       }
     });

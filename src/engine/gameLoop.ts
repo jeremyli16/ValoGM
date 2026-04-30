@@ -216,7 +216,7 @@ function simWeekMatches(state: GameState): GameState {
       match.id, teamA, teamB, playersA, playersB,
       state.roleRatings, match.format, rng, state.activeMapPool,
       { teamAMod: 1.0, teamBMod: 1.0 }, tacticsA, tacticsB,
-      state.agentMeta, state.agentMapMeta,
+      state.agentMeta, state.agentMapMeta, false,
     );
 
     // Track agent picks for patch calculation
@@ -612,7 +612,7 @@ function simPlayoffStage(state: GameState): GameState {
       state.roleRatings, match.format, rng, state.activeMapPool, modifiers,
       effectiveCoachStat(teamA, state.coaches, 'tactics'),
       effectiveCoachStat(teamB, state.coaches, 'tactics'),
-      state.agentMeta, state.agentMapMeta,
+      state.agentMeta, state.agentMapMeta, true,
     );
 
     // Track agent picks for patch calculation
