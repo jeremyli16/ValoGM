@@ -11,7 +11,7 @@
 | 5 — Swiss stage sim (Masters play-in) | ✅ Done |
 | 6 — Champions group stage sim | ✅ Done |
 | 7 — Main bracket + S1 choice | ✅ Done |
-| 8 — `inter_tournament` phase machine | ⬜ Next |
+| 8 — `inter_tournament` phase machine | ✅ Done |
 | 9 — Free agency unlock + roster lock | ✅ Done |
 | 10 — Tournament display screen | ⬜ |
 | 11 — History screen tournament entries | ⬜ |
@@ -488,7 +488,7 @@ set to `true` so the Stats screen can filter them separately.
 | 5 | Swiss stage sim (Masters play-in) | `gameLoop.ts` (new SwissStage simulator) | ✅ |
 | 6 | Champions group stage sim | `gameLoop.ts` (run 4× mini double-elim) | ✅ |
 | 7 | Main bracket + S1 choice | `gameLoop.ts`, `App.tsx` (new callback) | ✅ |
-| 8 | `inter_tournament` phase machine | `gameLoop.ts` (checkPhaseTransition) | ⬜ |
+| 8 | `inter_tournament` phase machine | `gameLoop.ts` (checkPhaseTransition) | ✅ |
 | 9 | Free agency unlock + roster lock | `App.tsx`, `gameLoop.ts` | ✅ |
 | 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ⬜ |
 | 11 | History screen tournament entries | `screens/LeagueHistory.tsx` | ⬜ |
