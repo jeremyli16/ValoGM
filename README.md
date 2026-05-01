@@ -159,6 +159,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Teams written on every persist cycle (ensures roster/morale/record changes survive a reload)
 - Dirty-flag system for players, matches, and coaches; transfer offers are fully upserted each cycle
 - Full save/load reconstructs all `Map<>` structures from stored arrays
+- **All-seasons standings loaded at startup:** `loadGameState()` calls `standingsRepo.getAll()` — standings from every prior split are available in `state.standings` immediately on load
+- **Career stats in player detail:** Roster panel fetches all-time stats via `getByPlayer()` when a player is selected; career avg (K/D, ACS, ADR, Rating across all splits) shown below current-split avg when the player has history beyond the current split
+- **Per-split standings archive in History screen:** each split row in League History has a "Standings" toggle that expands a final-standings table (seed, team, W/L/Pts/map diff) pulled from the archived standings for that split's game-season
 
 ---
 
@@ -178,9 +181,6 @@ The `Player` type has no injury or availability field. All players are always av
 
 ### Offseason
 The `offseason` phase exists in `GamePhase` but the game never enters it cleanly — after playoffs the state machine resets directly into the next season. There is no offseason logic: no free agency period, no contract expirations being resolved, no salary cap enforcement, no draft, and no end-of-season player development pass.
-
-### Multi-Season Persistence
-Per-season player stats are written to IndexedDB and survive reloads within the current season. Historical match results and standings from prior seasons are not yet archived — at season transition, old stats remain in the store but there is no UI to view career records, cross-season leaderboards, or prior-season standings.
 
 ### Challengers League
 Eight challengers teams are generated and assigned rosters at game start. They do not have a schedule, standings, or playoff bracket. There is no promotion/relegation mechanic between Challengers and Partnership tiers.
