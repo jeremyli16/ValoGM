@@ -116,25 +116,42 @@ function rotateMapPool(state: GameState): GameState {
 // ─── Practice Allocation ─────────────────────────────────────────────────────
 
 function applyPracticeAllocation(state: GameState): GameState {
-  const team = state.teams.get(state.playerTeamId);
-  if (!team) return state;
-  const allocation = team.practiceAllocation ?? {};
-  const pool = team.mapPool ?? {};
-  const newPool = { ...pool };
+  const rng = createRng(state.seed + state.season * 9001 + state.week * 137);
 
-  for (const mapName of MAP_POOL) {
-    const pts = allocation[mapName] ?? 0;
-    const current = newPool[mapName] ?? 50;
-    if (pts > 0) {
-      const rawGain = pts * 2;
-      const diminishing = rawGain * (1 - current / 120);
-      newPool[mapName] = Math.min(100, current + diminishing);
+  state.teams.forEach((team, teamId) => {
+    const pool = team.mapPool ?? {};
+    const newPool = { ...pool };
+
+    if (teamId === state.playerTeamId) {
+      // Player team: use explicit allocation
+      const allocation = team.practiceAllocation ?? {};
+      for (const mapName of MAP_POOL) {
+        const pts = allocation[mapName] ?? 0;
+        const current = newPool[mapName] ?? 50;
+        if (pts > 0) {
+          const rawGain = pts * 2;
+          const diminishing = rawGain * (1 - current / 120);
+          newPool[mapName] = Math.min(100, current + diminishing);
+        } else {
+          newPool[mapName] = Math.max(0, current - 0.5);
+        }
+      }
     } else {
-      newPool[mapName] = Math.max(0, current - 0.5);
+      // AI teams: seeded random drift — active maps trend toward 60, reserve maps decay
+      for (const mapName of MAP_POOL) {
+        const current = newPool[mapName] ?? 50;
+        if (state.activeMapPool.includes(mapName)) {
+          const drift = randFloat(rng, -1, 2.5) + (60 - current) * 0.015;
+          newPool[mapName] = Math.min(100, Math.max(0, current + drift));
+        } else {
+          newPool[mapName] = Math.max(0, current - 0.3);
+        }
+      }
     }
-  }
 
-  state.teams.set(state.playerTeamId, { ...team, mapPool: newPool });
+    state.teams.set(teamId, { ...team, mapPool: newPool });
+  });
+
   return state;
 }
 
