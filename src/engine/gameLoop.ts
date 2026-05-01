@@ -461,39 +461,39 @@ function buildSeasonRecord(state: GameState, gameSeason: number): SeasonRecord |
 
 // ─── Tournament helpers ───────────────────────────────────────────────────────
 
-function isPlayerEliminatedFromTournament(
+export function isTeamAliveInTournament(
   t: InternationalTournament,
-  playerTeamId: string,
+  teamId: string,
 ): boolean {
-  if (!t.qualifiedTeams.some(s => s.teamId === playerTeamId)) return true;
+  if (!t.qualifiedTeams.some(s => s.teamId === teamId)) return false;
 
   const playIn = t.playInBracket;
   if (t.name !== 'Champions' && playIn) {
     const swissLosses = playIn.matches.filter(m =>
       m.id.startsWith('SW_') && m.result &&
-      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
-       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+      ((m.teamAId === teamId && m.result.winner === 'B') ||
+       (m.teamBId === teamId && m.result.winner === 'A'))
     ).length;
-    if (swissLosses >= 2) return true;
+    if (swissLosses >= 2) return false;
   } else if (t.name === 'Champions' && playIn) {
     const groupElim = playIn.matches.some(m =>
       (m.id.includes('_LBR1') || m.id.includes('_LBF')) && m.result &&
-      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
-       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+      ((m.teamAId === teamId && m.result.winner === 'B') ||
+       (m.teamBId === teamId && m.result.winner === 'A'))
     );
-    if (groupElim) return true;
+    if (groupElim) return false;
   }
 
   if (t.mainBracket) {
     const lbLoss = t.mainBracket.matches.some(m =>
       m.bracket === 'lower' && m.result &&
-      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
-       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+      ((m.teamAId === teamId && m.result.winner === 'B') ||
+       (m.teamBId === teamId && m.result.winner === 'A'))
     );
-    if (lbLoss) return true;
+    if (lbLoss) return false;
   }
 
-  return false;
+  return true;
 }
 
 // ─── Phase transitions ────────────────────────────────────────────────────────
@@ -1380,7 +1380,7 @@ export function advanceWeek(state: GameState): GameState {
       return state;
     }
     if (t.phase !== 'complete') {
-      if (isPlayerEliminatedFromTournament(t, state.playerTeamId)) {
+      if (!isTeamAliveInTournament(t, state.playerTeamId)) {
         for (let w = state.week; w <= 3; w++) {
           const rng = createRng(state.seed + state.season * 1000 + w + 20000);
           if (t.name === 'Champions') simChampionsWeek(t, state, rng, w as 1 | 2 | 3);
@@ -1398,7 +1398,17 @@ export function advanceWeek(state: GameState): GameState {
   }
 
   if (state.phase === 'offseason') {
-    if (state.week === 1) state = detectExpiringContracts(state);
+    if (state.week === 1) {
+      state = detectExpiringContracts(state);
+      state.notifications.push({
+        id: notifId(),
+        type: 'playoff',
+        title: 'Transfer Window Open',
+        body: 'Free agency is active — 4 weeks to sign players and make transfers.',
+        week: state.week,
+        read: false,
+      });
+    }
     if (state.week === 2) state = warnUnresolvedRenewals(state);
     if (state.week >= 3) state = resolveExpiredRenewals(state);
     state = processRenewalOffers(state);

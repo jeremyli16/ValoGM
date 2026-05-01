@@ -58,6 +58,8 @@ interface Props {
   onHireCoach?: (coachId: string, role: CoachRole) => void;
   onFireCoach?: (role: CoachRole) => void;
   onMakeOffer?: (playerId: string, salary: number, length: number, fee: number) => void;
+  lockedPlayerIds?: Set<string>;
+  outgoingBlocked?: boolean;
 }
 
 type Tab = 'players' | 'coaches';
@@ -75,11 +77,12 @@ function acceptanceLikelihood(
   return Math.round(Math.max(5, Math.min(95, salaryScore + prestigeScore)));
 }
 
-function PlayerCard({ player, roleRatings, onOffer, showOffer }: {
+function PlayerCard({ player, roleRatings, onOffer, showOffer, isLocked }: {
   player: Player;
   roleRatings: DisplayRoleRating[];
   onOffer: (p: Player) => void;
   showOffer: boolean;
+  isLocked?: boolean;
 }) {
   return (
     <div className="card" style={{ padding: '10px 12px' }}>
@@ -96,7 +99,11 @@ function PlayerCard({ player, roleRatings, onOffer, showOffer }: {
             <div className="font-mono text-xs">${player.salary.toLocaleString()}/yr</div>
             <div className="text-dim text-xs">{player.nationality} · Age {player.age}</div>
           </div>
-          {showOffer && (
+          {isLocked ? (
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)' }}>
+              LOCKED
+            </span>
+          ) : showOffer && (
             <button className="btn btn-teal" style={{ fontSize: 11 }} onClick={() => onOffer(player)}>
               Make Offer
             </button>
@@ -349,7 +356,7 @@ function HireModal({ coach, state, onClose, onHire }: {
   );
 }
 
-export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer }: Props) {
+export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, lockedPlayerIds, outgoingBlocked }: Props) {
   const [tab, setTab] = useState<Tab>('players');
 
   // ── Players tab state ──
@@ -524,6 +531,7 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer }:
                   roleRatings={roleRatings}
                   onOffer={setOfferTarget}
                   showOffer={!pendingOfferPlayerIds.has(p.id)}
+                  isLocked={outgoingBlocked || lockedPlayerIds?.has(p.id)}
                 />
               );
             })}

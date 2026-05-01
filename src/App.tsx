@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import type { GameState, RegionId, Player, CoachRole } from './types';
 import { HOME_NATIONALITIES } from './types';
-import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer } from './engine/gameLoop';
+import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer, isTeamAliveInTournament } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
@@ -24,6 +24,22 @@ export function App() {
   const [nav, setNav] = useState<NavItem>('dashboard');
   const [loading, setLoading] = useState(false);
   const [importViolators, setImportViolators] = useState<Player[]>([]);
+
+  const lockedPlayerIds = useMemo(() => {
+    const t = gameState?.phase === 'inter_tournament' ? gameState.activeInternationalTournament : null;
+    if (!t || !gameState) return new Set<string>();
+    const locked = new Set<string>();
+    gameState.players.forEach(p => {
+      if (p.teamId && isTeamAliveInTournament(t, p.teamId)) locked.add(p.id);
+    });
+    return locked;
+  }, [gameState]);
+
+  const playerOutgoingTransfersBlocked = useMemo(() => {
+    if (!gameState || gameState.phase !== 'inter_tournament') return false;
+    const t = gameState.activeInternationalTournament;
+    return !!t && isTeamAliveInTournament(t, gameState.playerTeamId);
+  }, [gameState]);
 
   const handleStart = useCallback(async (regionId: RegionId, teamIndex: number, seed: number) => {
     setLoading(true);
@@ -58,17 +74,23 @@ export function App() {
 
   const handleReleasePlayer = useCallback(async (playerId: string) => {
     if (!gameState) return;
+    if (lockedPlayerIds.has(playerId)) return;
     const next = releasePlayer(gameState, playerId);
     setGameState({ ...next });
     await persistGameState(next);
-  }, [gameState]);
+  }, [gameState, lockedPlayerIds]);
 
   const handleMakeOffer = useCallback(async (playerId: string, salary: number, length: number, fee: number) => {
     if (!gameState) return;
+    if (lockedPlayerIds.has(playerId)) return;
+    if (gameState.phase === 'inter_tournament') {
+      const t = gameState.activeInternationalTournament;
+      if (t && isTeamAliveInTournament(t, gameState.playerTeamId)) return;
+    }
     const next = makeTransferOffer(gameState, playerId, salary, length, fee);
     setGameState({ ...next });
     await persistGameState(next);
-  }, [gameState]);
+  }, [gameState, lockedPlayerIds]);
 
   const handleHireCoach = useCallback((coachId: string, role: CoachRole) => {
     if (!gameState) return;
@@ -200,7 +222,7 @@ export function App() {
       <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
         {nav === 'dashboard'  && <Dashboard  state={gameState} />}
         {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} onReleasePlayer={handleReleasePlayer} />}
-        {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} onMakeOffer={handleMakeOffer} />}
+        {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} onMakeOffer={handleMakeOffer} lockedPlayerIds={lockedPlayerIds} outgoingBlocked={playerOutgoingTransfersBlocked} />}
         {nav === 'matchday'   && <MatchDay   state={gameState} />}
         {nav === 'standings'  && <Standings  state={gameState} />}
         {nav === 'schedule'   && <Schedule   state={gameState} />}
