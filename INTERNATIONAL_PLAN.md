@@ -485,9 +485,9 @@ set to `true` so the Stats screen can filter them separately.
 | 2 | Background league simulation | `gameLoop.ts` (simWeekMatches, season transition), `types.ts`, `db/schema.ts`, `db/repos.ts` | ✅ |
 | 3 | New types + GameState fields | `types.ts`, `db/schema.ts`, `db/repos.ts` | ✅ |
 | 4 | Qualification logic + tournament builder | `gameLoop.ts` (new functions) | ✅ |
-| 5 | Swiss stage sim (Masters play-in) | `gameLoop.ts` (new SwissStage simulator) | ⬜ |
-| 6 | Champions group stage sim | `gameLoop.ts` (run 4× mini double-elim) | ⬜ |
-| 7 | Main bracket + S1 choice | `gameLoop.ts`, `App.tsx` (new callback) | ⬜ |
+| 5 | Swiss stage sim (Masters play-in) | `gameLoop.ts` (new SwissStage simulator) | ✅ |
+| 6 | Champions group stage sim | `gameLoop.ts` (run 4× mini double-elim) | ✅ |
+| 7 | Main bracket + S1 choice | `gameLoop.ts`, `App.tsx` (new callback) | ✅ |
 | 8 | `inter_tournament` phase machine | `gameLoop.ts` (checkPhaseTransition) | ⬜ |
 | 9 | Free agency unlock + roster lock | `App.tsx`, `gameLoop.ts` | ⬜ |
 | 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ⬜ |

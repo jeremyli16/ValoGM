@@ -2,7 +2,7 @@ import type {
   GameState, ScheduledMatch, Player, Team, Organization, League,
   StandingsRow, PlayoffMatch, PlayerRole, Coach,
   Contract, TransferOffer, TransferStatus, SplitRecord, SeasonRecord,
-  PlayerRoleRatingRecord, RegionId,
+  PlayerRoleRatingRecord, RegionId, InternationalTournament,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -16,6 +16,11 @@ import {
   updateStandingsAfterMatch, sortStandings, buildPlayoffBracket,
   getGrandFinalFatigueMod, generateSchedule, initStandings, pickInitialMapPool,
 } from './leagueInit';
+import {
+  buildMastersQualifiedTeams, buildChampionsQualifiedTeams,
+  buildTournament, awardPlayoffChampionsPoints, awardMastersTournamentPoints,
+  simMastersWeek, simChampionsWeek,
+} from './internationalTournament';
 
 let _nextNotifId = 1;
 function notifId() { return `notif_${_nextNotifId++}`; }
@@ -454,6 +459,43 @@ function buildSeasonRecord(state: GameState, gameSeason: number): SeasonRecord |
   };
 }
 
+// ─── Tournament helpers ───────────────────────────────────────────────────────
+
+function isPlayerEliminatedFromTournament(
+  t: InternationalTournament,
+  playerTeamId: string,
+): boolean {
+  if (!t.qualifiedTeams.some(s => s.teamId === playerTeamId)) return true;
+
+  const playIn = t.playInBracket;
+  if (t.name !== 'Champions' && playIn) {
+    const swissLosses = playIn.matches.filter(m =>
+      m.id.startsWith('SW_') && m.result &&
+      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
+       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+    ).length;
+    if (swissLosses >= 2) return true;
+  } else if (t.name === 'Champions' && playIn) {
+    const groupElim = playIn.matches.some(m =>
+      (m.id.includes('_LBR1') || m.id.includes('_LBF')) && m.result &&
+      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
+       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+    );
+    if (groupElim) return true;
+  }
+
+  if (t.mainBracket) {
+    const lbLoss = t.mainBracket.matches.some(m =>
+      m.bracket === 'lower' && m.result &&
+      ((m.teamAId === playerTeamId && m.result.winner === 'B') ||
+       (m.teamBId === playerTeamId && m.result.winner === 'A'))
+    );
+    if (lbLoss) return true;
+  }
+
+  return false;
+}
+
 // ─── Phase transitions ────────────────────────────────────────────────────────
 
 function checkPhaseTransition(state: GameState): GameState {
@@ -503,22 +545,58 @@ function checkPhaseTransition(state: GameState): GameState {
       read: false,
     });
   } else if (state.phase === 'playoffs' && state.playoffBracket?.champion) {
-    // Capture split record (one per game-season) and season record (every 3rd game-season)
     const splitRec = buildSplitRecord(state, state.season);
     if (splitRec) state.splitHistory = [...state.splitHistory, splitRec];
     const seasonRec = buildSeasonRecord(state, state.season);
     if (seasonRec) state.seasonHistory = [...state.seasonHistory, seasonRec];
 
-    state.phase = 'offseason';
+    // Award playoff Champions Points for all regions
+    const isSplit3 = state.season % 3 === 0;
+    awardPlayoffChampionsPoints(state, state.playoffBracket, isSplit3);
+    state.otherPlayoffBrackets.forEach(bracket =>
+      awardPlayoffChampionsPoints(state, bracket, isSplit3)
+    );
+
+    // Build inter-split international tournament
+    const splitNum = ((state.season - 1) % 3 + 1) as 1 | 2 | 3;
+    const calendarSeason = Math.ceil(state.season / 3);
+    const tournamentName: InternationalTournament['name'] =
+      splitNum === 1 ? 'Masters 1' : splitNum === 2 ? 'Masters 2' : 'Champions';
+    const qualifiedTeams = splitNum === 3
+      ? buildChampionsQualifiedTeams(state)
+      : buildMastersQualifiedTeams(state);
+    state.activeInternationalTournament = buildTournament(
+      tournamentName, calendarSeason, splitNum, qualifiedTeams,
+    );
+
+    state.phase = 'inter_tournament';
     state.week = 1;
     state.notifications.push({
       id: notifId(),
       type: 'playoff',
-      title: 'Season Over',
-      body: `Season ${state.season} is complete. Entering offseason.`,
+      title: tournamentName,
+      body: `${tournamentName} begins! ${qualifiedTeams.length} teams from all 4 regions compete.`,
       week: state.week,
       read: false,
     });
+  } else if (state.phase === 'inter_tournament') {
+    const t = state.activeInternationalTournament;
+    if (t?.phase === 'complete') {
+      if (t.name !== 'Champions') awardMastersTournamentPoints(state, t);
+      state.tournamentHistory = [...state.tournamentHistory, t];
+      state.activeInternationalTournament = null;
+      const winnerName = t.champion ? (state.teams.get(t.champion)?.name ?? '') : '';
+      state.phase = 'offseason';
+      state.week = 1;
+      state.notifications.push({
+        id: notifId(),
+        type: 'playoff',
+        title: `${t.name} Complete`,
+        body: `${winnerName} wins ${t.name}! Entering offseason.`,
+        week: state.week,
+        read: false,
+      });
+    }
   } else if (state.phase === 'offseason' && state.week > 4) {
     // New season
     state.season++;
@@ -1290,6 +1368,31 @@ export function advanceWeek(state: GameState): GameState {
     state = simPlayoffStage(state);
     state = weeklyPlayerTick(state);
     state.week++;
+    state = checkPhaseTransition(state);
+    return state;
+  }
+
+  if (state.phase === 'inter_tournament') {
+    const t = state.activeInternationalTournament;
+    if (!t) {
+      state.phase = 'offseason';
+      state.week = 1;
+      return state;
+    }
+    if (t.phase !== 'complete') {
+      if (isPlayerEliminatedFromTournament(t, state.playerTeamId)) {
+        for (let w = state.week; w <= 3; w++) {
+          const rng = createRng(state.seed + state.season * 1000 + w + 20000);
+          if (t.name === 'Champions') simChampionsWeek(t, state, rng, w as 1 | 2 | 3);
+          else simMastersWeek(t, state, rng, w as 1 | 2 | 3);
+        }
+      } else {
+        const rng = createRng(state.seed + state.season * 1000 + state.week + 20000);
+        if (t.name === 'Champions') simChampionsWeek(t, state, rng, state.week as 1 | 2 | 3);
+        else simMastersWeek(t, state, rng, state.week as 1 | 2 | 3);
+        state.week++;
+      }
+    }
     state = checkPhaseTransition(state);
     return state;
   }
