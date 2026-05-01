@@ -111,6 +111,7 @@ export interface Team {
   roundDiff: number;
   mapDiff: number;
   points: number;
+  championsPoints: number;
 }
 
 // ─── League ─────────────────────────────────────────────────────────────────

@@ -126,6 +126,7 @@ function generateTeam(
     roundDiff: 0,
     mapDiff: 0,
     points: 0,
+    championsPoints: 0,
   };
 }
 
