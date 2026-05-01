@@ -170,7 +170,17 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 ## Not Yet Implemented
 
 ### International Tournaments (in progress)
-International Masters and Champions tournaments connecting all 4 regions are planned but not yet implemented. See `INTERNATIONAL_PLAN.md` for the full spec and progress. Steps 1–2 (multi-region initialization and background simulation) are complete. Remaining: qualification logic, Swiss/group-stage formats, `inter_tournament` game phase, tournament bracket screen, and cross-region standings/stats views.
+International Masters and Champions tournaments connecting all 4 regions are partially implemented. See `INTERNATIONAL_PLAN.md` for the full spec and progress. Steps 1–7 are complete:
+- All 4 regions fully simulated (regular season + playoffs)
+- Qualification logic: Masters (top 3 per region), Champions (top 4 per region by Champions Points + standings)
+- Champions Points tracking: awarded for regular-season wins, playoff placements, and Masters tournament placements
+- Full tournament simulation engine in `src/engine/internationalTournament.ts`:
+  - Masters play-in: 8-team Swiss stage (R1 cross-region backtrack pairing, R2/R3 strength-paired)
+  - Masters main event: 8-team double-elim with S1 bracket choice (AI picks lowest-rated SQ)
+  - Champions group stage: Latin-square 4×4 group draw, per-group double-elim
+  - Champions playoff: 8-team double-elim with cross-group bracket constraint
+
+Remaining: `inter_tournament` game phase wiring (step 8), free agency unlock (step 9), tournament display screen (step 10), history/stats/standings updates (steps 11–13).
 
 ### Scouting
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.

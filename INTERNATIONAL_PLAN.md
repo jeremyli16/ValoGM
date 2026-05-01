@@ -6,12 +6,12 @@
 |------|--------|
 | 1 — Multi-region init | ✅ Done |
 | 2 — Background league simulation | ✅ Done |
-| 3 — New types + GameState fields | ⬜ Next |
-| 4 — Qualification logic + tournament builder | ⬜ |
-| 5 — Swiss stage sim (Masters play-in) | ⬜ |
-| 6 — Champions group stage sim | ⬜ |
-| 7 — Main bracket + S1 choice | ⬜ |
-| 8 — `inter_tournament` phase machine | ⬜ |
+| 3 — New types + GameState fields | ✅ Done |
+| 4 — Qualification logic + tournament builder | ✅ Done |
+| 5 — Swiss stage sim (Masters play-in) | ✅ Done |
+| 6 — Champions group stage sim | ✅ Done |
+| 7 — Main bracket + S1 choice | ✅ Done |
+| 8 — `inter_tournament` phase machine | ⬜ Next |
 | 9 — Free agency unlock + roster lock | ⬜ |
 | 10 — Tournament display screen | ⬜ |
 | 11 — History screen tournament entries | ⬜ |
@@ -29,6 +29,44 @@
 - Brackets stored in `otherPlayoffBrackets: Map<string, PlayoffBracket>` (added to `GameState` and serialized); cleared on offseason → regular_season
 - Season transition now regenerates schedules + standings for all 4 partnership leagues (not just player's)
 - Match pruning already applies to all leagues (filters by `m.season`, not leagueId)
+
+### Step 3 notes
+- `InternationalTournament`, `TournamentSeed` interfaces added to `types.ts` (after `PlayoffBracket`)
+- `championsPoints: number` added to `Team`
+- `GameState` gains: `otherPlayoffBrackets`, `activeInternationalTournament`, `tournamentHistory`
+- `SplitRecord.tournamentId?` added for future history linking
+- `'inter_tournament'` added to `GamePhase`
+- `SerializedGameState` in `schema.ts` and `repos.ts` updated for all new fields
+
+### Step 4 notes
+- All international logic lives in `src/engine/internationalTournament.ts` (kept out of `gameLoop.ts`)
+- `buildMastersQualifiedTeams` / `buildChampionsQualifiedTeams`: extract qualifiers from all 4 regions' playoff brackets, assign global seeds by rating-weighted score
+- Champions seed 3 & 4: ranked by `championsPoints`, then regular-season wins, then map diff
+- `awardPlayoffChampionsPoints`: split1/2 awards 5/3/2/1 pts (1st–4th); split3 awards only 3rd/4th (4/3 pts)
+- `buildTournament`: constructs an `InternationalTournament` stub ready for simulation
+
+### Step 5 notes
+- Swiss stage stored in `tournament.playInBracket` with match IDs `SW_R1_0`–`SW_R1_3`, `SW_R2_0`–`SW_R2_3`, `SW_R3_0`–`SW_R3_1`; all `feedsWinnerTo`/`feedsLoserTo` null (pairings computed dynamically)
+- R1 cross-region pairing uses backtracking: shuffles seed-3s with seeded RNG then assigns each seed-2 to first seed-3 from a different region
+- R2/R3 pairings filled in after the prior round: `pairByStrength` sorts pool by rating and pairs strongest vs weakest
+- `getSwissQualifiers`: returns up to 4 teams with 2 wins sorted 2-0 before 2-1 then by team avg rating
+- `mastersNeedsS1Choice` / `pickAIS1Choice`: AI picks lowest-rated SQ; player UI deferred to step 10
+
+### Step 6 notes
+- Latin square group assignment: shuffle 4 regions; group `g` gets region `r`'s team with `regionalSeed = (g+r)%4+1` — guarantees one team per region and one team per seed level per group
+- Each group is a 5-match double-elim (UBR1_A, UBR1_B, UBF, LBR1, LBF, GF), match IDs `CG_{g}_{round}`
+- `simChampionsGroups` simulates all 24 matches in correct dependency order
+- `getGroupAdvancers`: GF winner = group champion, GF loser = runner-up; both advance
+
+### Step 7 notes
+- Masters main bracket (`MN_*` prefix, 14 matches): UBR1_A–D → UBSF1/2 → UBF, LBR1_A/B → LBQF_A/B → LBSF → LBF(bo5) → GF(bo5)
+  - S1 half = UBR1_A + UBR1_B → UBSF1; S2 half = UBR1_C + UBR1_D → UBSF2
+  - LBR1 cross-half: UBR1_A loser + UBR1_C loser → LBR1_A; UBR1_B loser + UBR1_D loser → LBR1_B
+- Champions playoff bracket (`CP_*` prefix, 14 matches): UBQF_A–D → UBSF1/2 → UBF, LBR1_A/B → LBQF_A/B → LBSF → LBF(bo5) → GF(bo5)
+  - Each group's pair split across bracket halves (one in slots 1–4, one in 5–8)
+- `simMastersWeek(week 1|2|3)` / `simChampionsWeek(week 1|2|3)`: full 3-week tournament drivers
+- `awardMastersTournamentPoints`: uses `MN_` prefix extraction; Masters 1 = 6/4/3/2/1, Masters 2 = 8/6/5/4/3
+- `finalizeTournament`: sets `bracket.champion`, `tournament.champion`, `tournament.runnerUp`, `tournament.phase = 'complete'`
 
 ---
 
