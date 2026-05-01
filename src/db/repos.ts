@@ -157,6 +157,9 @@ export const standingsRepo = {
   async getForLeagueSeason(leagueId: string, season: number): Promise<(StandingsRow & { id: string })[]> {
     return (await getDb()).getAllFromIndex('standings', 'by-league-season', [leagueId, season]) as any;
   },
+  async getAll(): Promise<(StandingsRow & { id: string })[]> {
+    return (await getDb()).getAll('standings') as any;
+  },
   async put(row: StandingsRow & { id: string }): Promise<void> {
     await (await getDb()).put('standings', row);
   },
@@ -378,7 +381,7 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const matchMap = new Map(matches.map(m => [m.id, m]));
   const coachMap = new Map(coachesArr.map(c => [c.id, c]));
 
-  const standingsArr = await standingsRepo.getForLeagueSeason(saved.leagueId, saved.season);
+  const standingsArr = await standingsRepo.getAll();
   const standingsMap = new Map(standingsArr.map(r => [r.id, r]));
 
   const contractsArr = await (await getDb()).getAll('contracts');

@@ -41,10 +41,11 @@ function avgFromStats(stats: { kills: number; deaths: number; assists: number; a
   };
 }
 
-function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, onMove, onRelease }: {
+function PlayerDetail({ player, roleRatings, seasonAvg, careerAvg, isStarter, canPromote, onMove, onRelease }: {
   player: Player;
   roleRatings: PlayerRoleRatingRecord[];
   seasonAvg: SeasonAvg | null;
+  careerAvg: SeasonAvg | null;
   isStarter: boolean;
   canPromote: boolean;
   onMove: (playerId: string, to: 'starter' | 'bench') => void;
@@ -152,6 +153,36 @@ function PlayerDetail({ player, roleRatings, seasonAvg, isStarter, canPromote, o
         </div>
       ) : (
         <div className="text-dim text-xs">No matches played this season.</div>
+      )}
+
+      {careerAvg && careerAvg.games > (seasonAvg?.games ?? 0) && (
+        <div style={{ borderTop: '1px solid var(--border-dim)', paddingTop: 10 }}>
+          <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 6 }}>
+            Career <span style={{ fontWeight: 400 }}>({careerAvg.games}g)</span>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <span className="text-dim text-xs">K/D </span>
+              <span className="font-mono text-xs">
+                {careerAvg.deaths > 0 ? (careerAvg.kills / careerAvg.deaths).toFixed(2) : careerAvg.kills.toFixed(2)}
+              </span>
+            </div>
+            <div>
+              <span className="text-dim text-xs">ACS </span>
+              <span className="font-mono text-xs">{careerAvg.acs}</span>
+            </div>
+            <div>
+              <span className="text-dim text-xs">ADR </span>
+              <span className="font-mono text-xs">{careerAvg.adr}</span>
+            </div>
+            <div>
+              <span className="text-dim text-xs">Rating </span>
+              <span className="font-mono text-xs" style={{
+                color: careerAvg.rating >= 1.2 ? 'var(--teal)' : careerAvg.rating < 0.8 ? 'var(--red)' : 'var(--text-primary)',
+              }}>{careerAvg.rating.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
       )}
 
       <div style={{ paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -266,6 +297,7 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<'starters' | 'subs'>('starters');
   const [statsCache, setStatsCache] = useState<Map<string, SeasonAvg>>(new Map());
+  const [careerAvg, setCareerAvg] = useState<SeasonAvg | null>(null);
 
   const team = state.teams.get(state.playerTeamId);
   const starterIds = new Set(team?.rosterIds ?? []);
@@ -305,6 +337,16 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
     });
     return () => { cancelled = true; };
   }, [state.playerTeamId, state.season, state.week]);
+
+  useEffect(() => {
+    if (!selectedId) { setCareerAvg(null); return; }
+    let cancelled = false;
+    playerMatchStatsRepo.getByPlayer(selectedId).then(all => {
+      if (cancelled) return;
+      setCareerAvg(avgFromStats(all));
+    });
+    return () => { cancelled = true; };
+  }, [selectedId]);
 
   const selectedPlayer = selectedId ? state.players.get(selectedId) ?? null : null;
   const selectedRoleRatings = selectedPlayer
@@ -363,6 +405,7 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
             player={selectedPlayer}
             roleRatings={selectedRoleRatings}
             seasonAvg={statsCache.get(selectedPlayer.id) ?? null}
+            careerAvg={careerAvg}
             isStarter={starterIds.has(selectedPlayer.id)}
             canPromote={starters.length < 5}
             onMove={onMovePlayer}

@@ -1,4 +1,5 @@
-import type { GameState, SplitRecord, SeasonRecord, PlayerRole } from '../../types';
+import { useState } from 'react';
+import type { GameState, SplitRecord, SeasonRecord, PlayerRole, StandingsRow } from '../../types';
 
 const ROLE_COLORS: Record<PlayerRole, string> = {
   duelist:    'var(--role-duelist)',
@@ -67,45 +68,105 @@ function AwardCard({
   );
 }
 
+// ─── Split standings ──────────────────────────────────────────────────────────
+
+function SplitStandings({ gameSeason, state }: { gameSeason: number; state: GameState }) {
+  const rows: (StandingsRow & { name: string })[] = [];
+  state.standings.forEach(row => {
+    if (row.leagueId === state.leagueId && row.season === gameSeason) {
+      rows.push({ ...row, name: state.teams.get(row.teamId)?.name ?? row.teamId });
+    }
+  });
+  if (rows.length === 0) return null;
+  rows.sort((a, b) => b.points - a.points || b.mapDiff - a.mapDiff || b.roundDiff - a.roundDiff);
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8, fontSize: 11 }}>
+      <thead>
+        <tr style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em' }}>
+          <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>#</th>
+          <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>TEAM</th>
+          <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 400 }}>W</th>
+          <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 400 }}>L</th>
+          <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 400 }}>PTS</th>
+          <th style={{ textAlign: 'right', paddingBottom: 4, fontWeight: 400 }}>MD</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => {
+          const isPlayer = row.teamId === state.playerTeamId;
+          return (
+            <tr key={row.teamId} style={{ color: isPlayer ? 'var(--teal)' : 'var(--text-secondary)' }}>
+              <td style={{ fontFamily: 'var(--font-mono)', paddingRight: 6, color: 'var(--text-dim)' }}>{i + 1}</td>
+              <td style={{ fontWeight: isPlayer ? 700 : 400, paddingRight: 12 }}>{row.name}</td>
+              <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', paddingRight: 6 }}>{row.wins}</td>
+              <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', paddingRight: 6 }}>{row.losses}</td>
+              <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', paddingRight: 6 }}>{row.points}</td>
+              <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: row.mapDiff >= 0 ? 'var(--text-secondary)' : 'var(--red)' }}>
+                {row.mapDiff >= 0 ? '+' : ''}{row.mapDiff}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 // ─── Split row ────────────────────────────────────────────────────────────────
 
 function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
+  const [showStandings, setShowStandings] = useState(false);
   const winner    = teamName(state, split.winnerTeamId);
   const runnerUp  = teamName(state, split.runnerUpTeamId);
   const mvpAlias  = playerAlias(state, split.mvpPlayerId);
   const mvpTeam   = playerTeam(state, split.mvpPlayerId);
   const mvpRole   = playerRole(state, split.mvpPlayerId);
+  const gameSeason = (split.calendarSeason - 1) * 3 + split.splitNum;
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '70px 1fr 1fr 1fr',
-      gap: 12,
-      alignItems: 'center',
-      padding: '10px 0',
-      borderBottom: '1px solid var(--border-dim)',
-    }}>
-      <div style={{ fontFamily: 'var(--font-head)', fontSize: 11, color: 'var(--amber)', letterSpacing: '0.08em' }}>
-        SPLIT {split.splitNum}
-      </div>
-      <div>
-        <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>WINNER</div>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{winner}</div>
-      </div>
-      <div>
-        <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>RUNNER-UP</div>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{runnerUp}</div>
-      </div>
-      <div>
-        <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>SPLIT MVP</div>
-        <div style={{
-          fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 700,
-          color: mvpRole ? ROLE_COLORS[mvpRole] : 'var(--text-primary)',
-        }}>
-          {mvpAlias}
+    <div style={{ borderBottom: '1px solid var(--border-dim)' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '70px 1fr 1fr 1fr auto',
+        gap: 12,
+        alignItems: 'center',
+        padding: '10px 0',
+      }}>
+        <div style={{ fontFamily: 'var(--font-head)', fontSize: 11, color: 'var(--amber)', letterSpacing: '0.08em' }}>
+          SPLIT {split.splitNum}
         </div>
-        {mvpTeam && <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{mvpTeam}</div>}
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>WINNER</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{winner}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>RUNNER-UP</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{runnerUp}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>SPLIT MVP</div>
+          <div style={{
+            fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 700,
+            color: mvpRole ? ROLE_COLORS[mvpRole] : 'var(--text-primary)',
+          }}>
+            {mvpAlias}
+          </div>
+          {mvpTeam && <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{mvpTeam}</div>}
+        </div>
+        <button
+          className="btn"
+          style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-dim)' }}
+          onClick={() => setShowStandings(s => !s)}
+        >
+          {showStandings ? 'Hide' : 'Standings'}
+        </button>
       </div>
+      {showStandings && (
+        <div style={{ paddingBottom: 12 }}>
+          <SplitStandings gameSeason={gameSeason} state={state} />
+        </div>
+      )}
     </div>
   );
 }
