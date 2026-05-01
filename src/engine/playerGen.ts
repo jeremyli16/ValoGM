@@ -203,9 +203,10 @@ export function generatePlayerPool(
     [roleDistribution[i], roleDistribution[j]] = [roleDistribution[j], roleDistribution[i]];
   }
 
+  const idPrefix = regionId ? `p${regionId}_` : 'p';
   return roleDistribution.map((role, i) => {
     const archetype = pickArchetype(rng);
-    return generatePlayer(`p${startIndex + i}`, role, archetype, rng, regionId);
+    return generatePlayer(`${idPrefix}${startIndex + i}`, role, archetype, rng, regionId);
   });
 }
 
