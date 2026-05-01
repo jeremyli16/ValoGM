@@ -1,7 +1,8 @@
 import type {
-  GameState, ScheduledMatch, Player, Team, Notification,
+  GameState, ScheduledMatch, Player, Team, Organization, League, Notification,
   StandingsRow, PlayoffBracket, PlayoffMatch, PlayerRole, Coach,
   Contract, TransferOffer, TransferStatus, SplitRecord, SeasonRecord,
+  PlayerRoleRatingRecord,
 } from '../types';
 import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
@@ -455,7 +456,9 @@ function checkPhaseTransition(state: GameState): GameState {
   const maxRegularWeek = league.format.regularSeasonWeeks;
 
   if (state.phase === 'regular_season' && state.week > maxRegularWeek) {
-    // Transition to playoffs
+    // Transition to playoffs — eagerly simulate other leagues' full playoffs
+    state = simOtherLeaguesPlayoffs(state);
+
     state.phase = 'playoffs';
     state.week = 1;
 
@@ -543,21 +546,22 @@ function checkPhaseTransition(state: GameState): GameState {
     // Rotate map pool (60% no change, 30% swap 1, 10% swap 2)
     state = rotateMapPool(state);
 
-    // Generate new schedule
-    const league = state.leagues.get(state.leagueId);
-    if (league) {
-      const rng = createRng(state.seed + state.season * 10000);
-      const newLeague = { ...league, currentSeason: state.season, currentAct: 1 };
-      state.leagues.set(state.leagueId, newLeague);
-
-      const newMatches = generateSchedule(newLeague, state.season, rng);
-      newMatches.forEach(m => state.matches.set(m.id, m));
-
-      const newStandings = initStandings(newLeague, state.season);
-      newStandings.forEach(row => {
+    // Generate new schedule for all 4 partnership leagues
+    const allLeagueIds = [state.leagueId, ...state.otherLeagueIds];
+    for (const lid of allLeagueIds) {
+      const lg = state.leagues.get(lid);
+      if (!lg) continue;
+      const rng = createRng(state.seed + state.season * 10000 + lid.length);
+      const newLeague = { ...lg, currentSeason: state.season, currentAct: 1 };
+      state.leagues.set(lid, newLeague);
+      generateSchedule(newLeague, state.season, rng).forEach(m => state.matches.set(m.id, m));
+      initStandings(newLeague, state.season).forEach(row => {
         state.standings.set(`${row.leagueId}:${row.season}:${row.teamId}`, row);
       });
     }
+
+    // Clear other leagues' playoff brackets from the previous split
+    state.otherPlayoffBrackets.clear();
 
     // Prune matches from exactly the calendar season 3 behind the current one
     // (e.g. at calendar season 4, delete calendar season 1 = game-seasons 1–3)
@@ -578,6 +582,100 @@ function checkPhaseTransition(state: GameState): GameState {
   // Update act
   if (state.phase === 'regular_season') {
     state.act = state.week <= 3 ? 1 : state.week <= 6 ? 2 : 3;
+  }
+
+  return state;
+}
+
+// ─── Other-league playoff simulation ─────────────────────────────────────────
+
+// Full round order respecting bracket dependencies.
+const ALL_PLAYOFF_ROUNDS = ['UR1A', 'UR1B', 'LR1A', 'LR1B', 'USF1', 'USF2', 'LR2A', 'LR2B', 'UF', 'LR3', 'LF', 'GF'];
+
+function simFullPlayoffBracket(
+  bracket: import('../types').PlayoffBracket,
+  state: GameState,
+  rng: import('./rng').SeededRng,
+): void {
+  for (const roundId of ALL_PLAYOFF_ROUNDS) {
+    const match = bracket.matches.find(m => m.round === roundId);
+    if (!match || match.result || !match.teamAId || !match.teamBId) continue;
+
+    const teamA = state.teams.get(match.teamAId);
+    const teamB = state.teams.get(match.teamBId);
+    if (!teamA || !teamB) continue;
+
+    let modifiers = { teamAMod: 1.0, teamBMod: 1.0 };
+    if (match.round === 'GF') {
+      const lf = bracket.matches.find(m => m.round === 'LF');
+      if (lf?.result) {
+        const { upperMod, lowerMod } = getGrandFinalFatigueMod(lf);
+        modifiers = { teamAMod: upperMod, teamBMod: lowerMod };
+      }
+    }
+
+    const playersA = getRosterPlayers(state, match.teamAId);
+    const playersB = getRosterPlayers(state, match.teamBId);
+    const result = simMatch(
+      match.id, teamA, teamB, playersA, playersB,
+      state.roleRatings, match.format, rng, state.activeMapPool, modifiers,
+      effectiveCoachStat(teamA, state.coaches, 'tactics'),
+      effectiveCoachStat(teamB, state.coaches, 'tactics'),
+      state.agentMeta, state.agentMapMeta, true,
+    );
+
+    match.result = result;
+
+    if (match.feedsWinnerTo) {
+      const next = bracket.matches.find(m => m.id === match.feedsWinnerTo);
+      if (next) {
+        if (!next.teamAId) next.teamAId = result.winner === 'A' ? match.teamAId : match.teamBId;
+        else               next.teamBId = result.winner === 'A' ? match.teamAId : match.teamBId;
+      }
+    }
+    if (match.feedsLoserTo) {
+      const next = bracket.matches.find(m => m.id === match.feedsLoserTo);
+      if (next) {
+        const loserId = result.winner === 'A' ? match.teamBId : match.teamAId;
+        if (!next.teamAId) next.teamAId = loserId;
+        else               next.teamBId = loserId;
+      }
+    }
+    if (match.round === 'GF') {
+      bracket.champion = result.winner === 'A' ? match.teamAId : match.teamBId;
+    }
+  }
+}
+
+function simOtherLeaguesPlayoffs(state: GameState): GameState {
+  const rng = createRng(state.seed + state.season * 1000 + 50000);
+
+  for (const leagueId of state.otherLeagueIds) {
+    const league = state.leagues.get(leagueId);
+    if (!league) continue;
+
+    const standingsArr: StandingsRow[] = [];
+    state.standings.forEach(row => {
+      if (row.leagueId === leagueId && row.season === state.season) standingsArr.push(row);
+    });
+
+    const groupAIds = league.groups?.groupA ?? [];
+    const groupBIds = league.groups?.groupB ?? [];
+    const groupA = sortStandings(standingsArr.filter(r => groupAIds.includes(r.teamId)));
+    const groupB = sortStandings(standingsArr.filter(r => groupBIds.includes(r.teamId)));
+
+    const seeds = [
+      groupA[0]?.teamId, groupB[0]?.teamId,
+      groupA[1]?.teamId, groupB[1]?.teamId,
+      groupA[2]?.teamId, groupB[2]?.teamId,
+      groupA[3]?.teamId, groupB[3]?.teamId,
+    ].filter(Boolean) as string[];
+
+    if (seeds.length < 8) continue;
+
+    const bracket = buildPlayoffBracket(leagueId, state.season, seeds);
+    simFullPlayoffBracket(bracket, state, rng);
+    state.otherPlayoffBrackets.set(leagueId, bracket);
   }
 
   return state;
@@ -1203,41 +1301,58 @@ export function advanceWeek(state: GameState): GameState {
 import type { RegionId } from '../types';
 import { initLeague } from './leagueInit';
 
+const ALL_REGIONS: RegionId[] = ['americas', 'emea', 'pacific', 'china'];
+const REGION_SEED_OFFSETS: Record<RegionId, number> = {
+  americas: 0,
+  emea:     111111,
+  pacific:  222222,
+  china:    333333,
+};
+
 export function createNewGame(regionId: RegionId, teamIndex: number, seed: number): GameState {
-  const rng = createRng(seed);
-  const init = initLeague(regionId, seed, rng);
+  const players    = new Map<string, Player>();
+  const teams      = new Map<string, Team>();
+  const orgs       = new Map<string, Organization>();
+  const leagues    = new Map<string, League>();
+  const contracts  = new Map<string, Contract>();
+  const matches    = new Map<string, ScheduledMatch>();
+  const standings  = new Map<string, StandingsRow>();
+  const roleRatings = new Map<string, PlayerRoleRatingRecord>();
+  const coaches    = new Map<string, Coach>();
+  const freeAgents: string[] = [];
+  const freeAgentCoaches: string[] = [];
 
-  const players = new Map<string, Player>();
-  init.players.forEach(p => players.set(p.id, p));
+  let playerLeagueId = '';
+  const otherLeagueIds: string[] = [];
 
-  const teams = new Map<string, Team>();
-  init.teams.forEach(t => teams.set(t.id, t));
+  for (const region of ALL_REGIONS) {
+    const regionSeed = seed + REGION_SEED_OFFSETS[region];
+    const regionRng  = createRng(regionSeed);
+    const init       = initLeague(region, regionSeed, regionRng);
 
-  const orgs = new Map(init.orgs.map(o => [o.id, o]));
-  const leagues = new Map<string, typeof init.league>([
-    [init.league.id, init.league],
-    [init.challengers.id, init.challengers],
-  ]);
+    init.players.forEach(p => players.set(p.id, p));
+    init.teams.forEach(t => teams.set(t.id, t));
+    init.orgs.forEach(o => orgs.set(o.id, o));
+    leagues.set(init.league.id, init.league);
+    leagues.set(init.challengers.id, init.challengers);
+    init.contracts.forEach((c, id) => contracts.set(id, c));
+    init.matches.forEach(m => matches.set(m.id, m));
+    init.standings.forEach(row => standings.set(`${row.leagueId}:${row.season}:${row.teamId}`, row));
+    init.roleRatings.forEach(rr => roleRatings.set(rr.id, rr));
+    init.coaches.forEach(c => coaches.set(c.id, c));
+    init.players.filter(p => !p.teamId).forEach(p => freeAgents.push(p.id));
+    init.coaches.filter(c => !c.teamId).forEach(c => freeAgentCoaches.push(c.id));
 
-  const contracts = init.contracts;
+    if (region === regionId) {
+      playerLeagueId = init.league.id;
+    } else {
+      otherLeagueIds.push(init.league.id);
+    }
+  }
 
-  const matches = new Map<string, ScheduledMatch>();
-  init.matches.forEach(m => matches.set(m.id, m));
-
-  const standings = new Map<string, StandingsRow>();
-  init.standings.forEach(row => {
-    standings.set(`${row.leagueId}:${row.season}:${row.teamId}`, row);
-  });
-
-  const roleRatings = new Map<string, typeof init.roleRatings[0]>();
-  init.roleRatings.forEach(rr => roleRatings.set(rr.id, rr));
-
-  const coaches = new Map<string, Coach>();
-  init.coaches.forEach(c => coaches.set(c.id, c));
-
-  // Player picks a team from the partnership league
-  const playerTeam = teams.get(init.league.teamIds[teamIndex % 12]);
-  const playerTeamId = playerTeam?.id ?? init.league.teamIds[0];
+  // Player picks a team from their region's partnership league
+  const playerLeague = leagues.get(playerLeagueId)!;
+  const playerTeamId = playerLeague.teamIds[teamIndex % 12];
 
   return {
     phase: 'preseason',
@@ -1245,7 +1360,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     act: 1,
     week: 1,
     playerTeamId,
-    leagueId: init.league.id,
+    leagueId: playerLeagueId,
     regionId,
     seed,
     players,
@@ -1257,8 +1372,10 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     standings,
     roleRatings,
     coaches,
-    freeAgents: init.players.filter(p => !p.teamId).map(p => p.id),
-    freeAgentCoaches: init.coaches.filter(c => !c.teamId).map(c => c.id),
+    freeAgents,
+    freeAgentCoaches,
+    otherLeagueIds,
+    otherPlayoffBrackets: new Map(),
     splitHistory: [],
     seasonHistory: [],
     activeMapPool: pickInitialMapPool(createRng(seed + 88888)),

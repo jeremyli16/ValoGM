@@ -245,6 +245,10 @@ export async function persistGameState(state: GameState): Promise<void> {
     seed: state.seed,
     freeAgents: state.freeAgents,
     freeAgentCoaches: state.freeAgentCoaches,
+    otherLeagueIds: state.otherLeagueIds,
+    otherPlayoffBrackets: state.otherPlayoffBrackets.size > 0
+      ? Object.fromEntries(state.otherPlayoffBrackets)
+      : undefined,
     splitHistory: state.splitHistory,
     seasonHistory: state.seasonHistory,
     activeMapPool: state.activeMapPool,
@@ -399,6 +403,8 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     standings: standingsMap,
     coaches: coachMap,
     freeAgentCoaches: saved.freeAgentCoaches ?? [],
+    otherLeagueIds: saved.otherLeagueIds ?? [],
+    otherPlayoffBrackets: new Map(Object.entries(saved.otherPlayoffBrackets ?? {})),
     splitHistory: saved.splitHistory ?? [],
     seasonHistory: saved.seasonHistory ?? [],
     activeMapPool: saved.activeMapPool ?? MAP_POOL.slice(0, 7),

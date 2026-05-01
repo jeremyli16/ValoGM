@@ -126,15 +126,17 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **Passive scouting tick:** each week, the coach's effective Scouting rating raises role-rating confidence for all players on the squad (up to ~1.5 pts/week at max combined rating)
 
 **League Initialization**
-- 12 partnership teams + 8 challengers teams per region
-- Prestige-ordered roster draft from a shared player pool; bench roster is optional (teams may start with zero substitutes)
+- All 4 regions (Americas, EMEA, Pacific, China) fully initialized at game start — 12 partnership teams + 8 challengers teams per region (48 partnership + 32 challengers teams total)
+- Each region uses a distinct derived seed so results are deterministic but independent across regions
+- Prestige-ordered roster draft from a shared player pool per region; bench roster is optional (teams may start with zero substitutes)
 - Import rules enforced at draft (max 1 non-home-region starter per team)
-- **Round-robin schedule:** polygon-rotation algorithm guarantees every team plays exactly once per week across 5 regular-season weeks (3 matches per group per week, 6 total); no team sits out any week
+- **Round-robin schedule:** polygon-rotation algorithm guarantees every team plays exactly once per week across 5 regular-season weeks (3 matches per group per week, 6 total); no team sits out any week; generated for all 4 regions each split
 - Snake-draft group seeding
 
 **Game Phases**
 - `new_game → preseason → regular_season → playoffs → offseason → regular_season → ...`
 - Each week advance simulates that week's matches, updates standings, ticks morale, and checks for phase transitions
+- **Background region simulation:** all 3 non-player regions run their regular-season matches each week alongside the player's league; when the player's league enters playoffs, the other 3 regions' full playoff brackets are auto-simulated in one shot (results stored in `otherPlayoffBrackets`); new schedules are generated for all 4 regions each offseason transition
 
 **Coaching Staff**
 - Each team may have one head coach and one optional assistant coach
@@ -166,6 +168,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 ---
 
 ## Not Yet Implemented
+
+### International Tournaments (in progress)
+International Masters and Champions tournaments connecting all 4 regions are planned but not yet implemented. See `INTERNATIONAL_PLAN.md` for the full spec and progress. Steps 1–2 (multi-region initialization and background simulation) are complete. Remaining: qualification logic, Swiss/group-stage formats, `inter_tournament` game phase, tournament bracket screen, and cross-region standings/stats views.
 
 ### Scouting
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.

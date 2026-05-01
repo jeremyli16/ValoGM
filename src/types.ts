@@ -326,6 +326,9 @@ export interface GameState {
   transferOffers: TransferOffer[];
   playoffBracket: PlayoffBracket | null;
 
+  otherLeagueIds: string[];
+  otherPlayoffBrackets: Map<string, PlayoffBracket>;
+
   splitHistory: SplitRecord[];
   seasonHistory: SeasonRecord[];
   activeMapPool: string[];
