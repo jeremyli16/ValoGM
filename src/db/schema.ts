@@ -3,7 +3,7 @@ import type {
   Player, PlayerRoleRatingRecord, Team, Organization, League,
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
   Notification, PlayerMatchStat, GameState, Coach,
-  SplitRecord, SeasonRecord, PlayoffBracket,
+  SplitRecord, SeasonRecord, PlayoffBracket, InternationalTournament,
 } from '../types';
 
 export interface ValoGMSchema extends DBSchema {
@@ -98,6 +98,8 @@ export interface SerializedGameState {
   freeAgentCoaches: string[];
   otherLeagueIds?: string[];
   otherPlayoffBrackets?: Record<string, PlayoffBracket>;
+  activeInternationalTournament?: InternationalTournament | null;
+  tournamentHistory?: InternationalTournament[];
   splitHistory?: SplitRecord[];
   seasonHistory?: SeasonRecord[];
   activeMapPool?: string[];

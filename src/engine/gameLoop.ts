@@ -1376,6 +1376,8 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     freeAgentCoaches,
     otherLeagueIds,
     otherPlayoffBrackets: new Map(),
+    activeInternationalTournament: null,
+    tournamentHistory: [],
     splitHistory: [],
     seasonHistory: [],
     activeMapPool: pickInitialMapPool(createRng(seed + 88888)),

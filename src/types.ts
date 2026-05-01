@@ -3,7 +3,7 @@
 export type PlayerRole = 'duelist' | 'initiator' | 'controller' | 'sentinel';
 export type BuyType = 'fullBuy' | 'halfBuy' | 'forceBuy' | 'eco' | 'pistol';
 export type RegionId = 'americas' | 'emea' | 'pacific' | 'china';
-export type GamePhase = 'preseason' | 'regular_season' | 'playoffs' | 'offseason' | 'new_game';
+export type GamePhase = 'preseason' | 'regular_season' | 'playoffs' | 'inter_tournament' | 'offseason' | 'new_game';
 export type PlayerArchetype = 'prodigy' | 'star' | 'veteran' | 'journeyman' | 'specialist';
 export type LeagueTier = 'partnership' | 'challengers';
 export type TransferStatus = 'pending' | 'accepted' | 'rejected' | 'countered';
@@ -274,6 +274,30 @@ export interface Decision {
   data: Record<string, string | number | boolean>;
 }
 
+// ─── International Tournaments ───────────────────────────────────────────────
+
+export interface TournamentSeed {
+  teamId: string;
+  region: RegionId;
+  regionalSeed: number;
+  globalSeed: number;
+}
+
+export interface InternationalTournament {
+  id: string;
+  name: 'Masters 1' | 'Masters 2' | 'Champions';
+  calendarSeason: number;
+  splitNum: 1 | 2 | 3;
+  phase: 'play_in' | 'main_event' | 'complete';
+  playInBracket: PlayoffBracket | null;
+  mainBracket: PlayoffBracket | null;
+  qualifiedTeams: TournamentSeed[];
+  seedOneChoice: string | null;
+  champion: string | null;
+  runnerUp: string | null;
+  mvpPlayerId: string | null;
+}
+
 // ─── League History ───────────────────────────────────────────────────────────
 
 // calendarSeason groups every 3 game-seasons (1 = game-seasons 1-3, 2 = 4-6, …)
@@ -284,6 +308,7 @@ export interface SplitRecord {
   winnerTeamId: string;
   runnerUpTeamId: string;
   mvpPlayerId: string;
+  tournamentId?: string;
 }
 
 // Captured at the end of every 3rd game-season (splitNum === 3)
@@ -328,6 +353,9 @@ export interface GameState {
 
   otherLeagueIds: string[];
   otherPlayoffBrackets: Map<string, PlayoffBracket>;
+
+  activeInternationalTournament: InternationalTournament | null;
+  tournamentHistory: InternationalTournament[];
 
   splitHistory: SplitRecord[];
   seasonHistory: SeasonRecord[];
