@@ -171,7 +171,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.
 
 ### Map Pool Editing
-Each team has a `mapPool: Record<string, number>` (0–100 practice score per map) covering all 12 maps in the universe. Practice scores already affect match simulation — higher scores give a small aim/game-sense multiplier on that map and influence ban/pick decisions. However, there is no UI for the player to view or adjust their team's map pool scores; teams cannot actively train on maps coming into the rotation.
+~~Implemented.~~ Player team uses explicit per-map practice allocation (UI sliders, `PRACTICE_BUDGET = 5` pts/week); active maps with pts > 0 gain score via diminishing returns, unallocated active maps decay 0.5/week. AI teams receive seeded random drift each regular-season week — active maps trend toward 60 with noise, reserve maps decay 0.3/week. Scores feed into match simulation aim/game-sense multiplier and ban/pick decisions.
 
 ### Chemistry
 `Team.chemistry` is tracked but never read. No mechanic increases or decreases it (e.g., playing together, transfers, losing streaks), and it has no influence on match simulation.
