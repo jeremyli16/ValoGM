@@ -293,8 +293,9 @@ export interface TournamentPlayerStat {
   totalAcs: number;       // sum of (acs * maps) across matches
   rounds: number;
   maps: number;
-  weightedRating: number; // sum of (rating * stageWeight * maps)
-  weightedMaps: number;   // sum of (stageWeight * maps) — denominator for avg
+  totalRating: number;    // sum of (rating * maps) — for avg display
+  weightedRating: number; // sum of (rating * stageWeight * maps) — for MVP only
+  weightedMaps: number;   // sum of (stageWeight * maps) — denominator for MVP avg
 }
 
 export interface InternationalTournament {

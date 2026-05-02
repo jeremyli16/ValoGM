@@ -229,6 +229,7 @@ function accumulateMatchStats(
       existing.totalAcs      += s.acs * s.maps;
       existing.rounds        += s.rounds;
       existing.maps          += s.maps;
+      existing.totalRating    += s.rating * s.maps;
       existing.weightedRating += s.rating * weight * s.maps;
       existing.weightedMaps   += weight * s.maps;
     } else {
@@ -241,6 +242,7 @@ function accumulateMatchStats(
         totalAcs:       s.acs * s.maps,
         rounds:         s.rounds,
         maps:           s.maps,
+        totalRating:    s.rating * s.maps,
         weightedRating: s.rating * weight * s.maps,
         weightedMaps:   weight * s.maps,
       };

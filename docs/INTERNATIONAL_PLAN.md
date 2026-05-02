@@ -15,7 +15,7 @@
 | 9 — Free agency unlock + roster lock | ✅ Done |
 | 10 — Tournament display screen | ✅ Done |
 | 11 — History screen tournament entries | ✅ Done |
-| 12 — Stats screen region + tournament filter | ⬜ |
+| 12 — Stats screen region + tournament filter | ✅ Done |
 | 13 — Standings screen region tabs | ⬜ |
 
 ### Step 1 notes
@@ -492,7 +492,7 @@ set to `true` so the Stats screen can filter them separately.
 | 9 | Free agency unlock + roster lock | `App.tsx`, `gameLoop.ts` | ✅ |
 | 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ✅ |
 | 11 | History screen tournament entries | `screens/LeagueHistory.tsx` | ✅ |
-| 12 | Stats screen region + tournament filter | `screens/Stats.tsx` | ⬜ |
+| 12 | Stats screen region + tournament filter | `screens/Stats.tsx` | ✅ |
 | 13 | Standings screen region tabs | `screens/Standings.tsx` | ⬜ |
 
 ---
