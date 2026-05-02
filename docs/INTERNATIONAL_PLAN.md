@@ -16,7 +16,7 @@
 | 10 — Tournament display screen | ✅ Done |
 | 11 — History screen tournament entries | ✅ Done |
 | 12 — Stats screen region + tournament filter | ✅ Done |
-| 13 — Standings screen region tabs | ⬜ |
+| 13 — Standings screen region tabs | ✅ Done |
 
 ### Step 1 notes
 - `initLeague` called for all 4 regions in `createNewGame` with distinct derived seeds (`seed + 0/111111/222222/333333`)
@@ -493,7 +493,7 @@ set to `true` so the Stats screen can filter them separately.
 | 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ✅ |
 | 11 | History screen tournament entries | `screens/LeagueHistory.tsx` | ✅ |
 | 12 | Stats screen region + tournament filter | `screens/Stats.tsx` | ✅ |
-| 13 | Standings screen region tabs | `screens/Standings.tsx` | ⬜ |
+| 13 | Standings screen region tabs | `screens/Standings.tsx` | ✅ |
 
 ---
 
