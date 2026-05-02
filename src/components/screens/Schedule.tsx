@@ -103,7 +103,7 @@ export function Schedule({ state }: Props) {
                       {won ? 'W' : 'L'}
                     </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                      {result.winsA}–{result.winsB}
+                      {isA ? result.winsA : result.winsB}–{isA ? result.winsB : result.winsA}
                     </span>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {result.mapResults.map((mr: MapResult, i: number) => (

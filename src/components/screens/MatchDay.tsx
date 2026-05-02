@@ -116,76 +116,69 @@ function ScoreDisplay({ resultA, resultB, mapName }: { resultA: number; resultB:
   );
 }
 
+const ATK_COLOR = 'var(--amber)';
+const DEF_COLOR = '#4a9eff';
+const DIM_COLOR = 'rgba(255,255,255,0.07)';
+
 function RoundTimeline({ rounds, playerIsA, playerTeamName, oppTeamName }: {
   rounds: RoundResultSummary[];
   playerIsA: boolean;
   playerTeamName: string;
   oppTeamName: string;
 }) {
-  const firstHalf  = rounds.filter(r => r.roundNum <= 12);
-  const secondHalf = rounds.filter(r => r.roundNum > 12 && r.roundNum <= 24);
+  const roundMap = new Map(rounds.map(r => [r.roundNum, r]));
+  // Always show 24 regulation rounds padded with nulls
+  const firstHalf  = Array.from({ length: 12 }, (_, i) => roundMap.get(i + 1)  ?? null);
+  const secondHalf = Array.from({ length: 12 }, (_, i) => roundMap.get(i + 13) ?? null);
   const overtime   = rounds.filter(r => r.roundNum > 24);
 
-  function playerWonRound(r: RoundResultSummary): boolean {
-    const attackSide = r.attackSide ?? (r.roundNum <= 12 ? 'A' : 'B');
-    const aWon = attackSide === 'A' ? r.winner === 'attack' : r.winner === 'defense';
-    return playerIsA ? aWon : !aWon;
+  const CELL: React.CSSProperties = { width: 20, height: 18, borderRadius: 2, flexShrink: 0 };
+
+  function cellColor(r: RoundResultSummary | null): string {
+    if (!r) return DIM_COLOR;
+    return r.winner === 'attack' ? ATK_COLOR : DEF_COLOR;
   }
 
-  const CELL: React.CSSProperties = { width: 20, height: 15, borderRadius: 2, flexShrink: 0 };
-  const DIM = 'rgba(255,255,255,0.07)';
-
-  const renderGroup = (group: RoundResultSummary[]) => (
+  const renderGroup = (group: (RoundResultSummary | null)[], startNum: number) => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <div style={{ display: 'flex', gap: 2 }}>
-        {group.map(r => (
-          <div key={r.roundNum} style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
-            <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{r.roundNum}</span>
+        {group.map((_, i) => (
+          <div key={startNum + i} style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
+            <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{startNum + i}</span>
           </div>
         ))}
       </div>
       <div style={{ display: 'flex', gap: 2 }}>
-        {group.map(r => {
-          const pw = playerWonRound(r);
-          return <div key={r.roundNum} style={{ ...CELL, background: pw ? 'var(--teal)' : DIM }} />;
-        })}
-      </div>
-      <div style={{ display: 'flex', gap: 2 }}>
-        {group.map(r => {
-          const pw = playerWonRound(r);
-          return <div key={r.roundNum} style={{ ...CELL, background: !pw ? 'var(--red)' : DIM }} />;
-        })}
+        {group.map((r, i) => (
+          <div key={startNum + i} style={{ ...CELL, background: cellColor(r) }} />
+        ))}
       </div>
     </div>
   );
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.05em',
-    textTransform: 'uppercase', height: 15, display: 'flex', alignItems: 'center',
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 72,
-  };
-
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 14, paddingRight: 4 }}>
-        <div style={{ ...labelStyle, color: 'var(--teal)' }}>{playerTeamName}</div>
-        <div style={{ ...labelStyle, color: 'var(--red)' }}>{oppTeamName}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: ATK_COLOR }}>■ ATK</span>
+        <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: DEF_COLOR }}>■ DEF</span>
+        <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>
+          {playerIsA ? playerTeamName : oppTeamName} starts attack
+        </span>
       </div>
-      {renderGroup(firstHalf)}
-      {secondHalf.length > 0 && (
-        <>
-          <div style={{ width: 6 }} />
-          {renderGroup(secondHalf)}
-        </>
-      )}
-      {overtime.length > 0 && (
-        <>
-          <div style={{ width: 6, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
-            <div style={{ width: 1, height: '100%', background: 'var(--amber)', opacity: 0.4, margin: '0 auto' }} />
-          </div>
-          {renderGroup(overtime)}
-        </>
-      )}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        {renderGroup(firstHalf, 1)}
+        <div style={{ width: 6 }} />
+        {renderGroup(secondHalf, 13)}
+        {overtime.length > 0 && (
+          <>
+            <div style={{ width: 6, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
+              <div style={{ width: 1, height: '100%', background: 'var(--amber)', opacity: 0.4, margin: '0 auto' }} />
+            </div>
+            {renderGroup(overtime.map(r => r), 25)}
+          </>
+        )}
+      </div>
     </div>
   );
 }

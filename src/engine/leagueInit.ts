@@ -7,7 +7,7 @@ import {
   MAP_POOL,
 } from '../types';
 import type { SeededRng } from './rng';
-import { randInt, randFloat, randChoice, shuffle, clamp } from './rng';
+import { randInt, randFloat, randChoice, weightedChoice, shuffle, clamp } from './rng';
 import { generatePlayerPool } from './playerGen';
 import { generateCoachPool } from './coachGen';
 
@@ -142,7 +142,11 @@ function assignRoster(
   rng: SeededRng
 ): void {
   const { maxImports } = IMPORT_LIMITS[team.region];
-  const needed: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel', 'duelist'];
+  const doubleRole = weightedChoice(rng,
+    ['duelist', 'initiator', 'controller', 'sentinel'] as PlayerRole[],
+    [35, 35, 20, 10]
+  );
+  const needed: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel', doubleRole];
   const roster: Player[] = [];
   let imports = 0;
 

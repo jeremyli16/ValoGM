@@ -303,7 +303,8 @@ function TournamentRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const isChampions   = t.name === 'Champions';
-  const accent        = isChampions ? 'var(--amber)' : 'var(--teal)';
+  const isMasters     = t.name.startsWith('Masters');
+  const accent        = isChampions ? 'var(--amber)' : isMasters ? '#9b5fe0' : 'var(--teal)';
   const champion      = t.champion ? teamName(state, t.champion) : '—';
   const runnerUp      = t.runnerUp ? teamName(state, t.runnerUp) : '—';
   const mvpAlias      = t.mvpPlayerId ? playerAlias(state, t.mvpPlayerId) : '—';
