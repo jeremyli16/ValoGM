@@ -19,7 +19,7 @@ import {
 import {
   buildMastersQualifiedTeams, buildChampionsQualifiedTeams,
   buildTournament, awardPlayoffChampionsPoints, awardMastersTournamentPoints,
-  simMastersWeek, simChampionsWeek,
+  simMastersRound, simChampionsRound, MASTERS_ROUNDS, CHAMPIONS_ROUNDS,
 } from './internationalTournament';
 
 let _nextNotifId = 1;
@@ -1379,21 +1379,27 @@ export function advanceWeek(state: GameState): GameState {
       state.week = 1;
       return state;
     }
-    if (t.phase !== 'complete') {
-      if (!isTeamAliveInTournament(t, state.playerTeamId)) {
-        for (let w = state.week; w <= 3; w++) {
-          const rng = createRng(state.seed + state.season * 1000 + w + 20000);
-          if (t.name === 'Champions') simChampionsWeek(t, state, rng, w as 1 | 2 | 3);
-          else simMastersWeek(t, state, rng, w as 1 | 2 | 3);
-        }
-      } else {
-        const rng = createRng(state.seed + state.season * 1000 + state.week + 20000);
-        if (t.name === 'Champions') simChampionsWeek(t, state, rng, state.week as 1 | 2 | 3);
-        else simMastersWeek(t, state, rng, state.week as 1 | 2 | 3);
-        state.week++;
-      }
+    const maxRounds = t.name === 'Champions' ? CHAMPIONS_ROUNDS : MASTERS_ROUNDS;
+    const simRound  = (r: number) => {
+      const rng = createRng(state.seed + state.season * 1000 + r + 20000);
+      if (t.name === 'Champions') simChampionsRound(t, state, rng, r);
+      else simMastersRound(t, state, rng, r);
+    };
+
+    if (t.phase === 'complete') {
+      // Player has seen results — now transition to offseason
+      state = checkPhaseTransition(state);
+    } else if (!isTeamAliveInTournament(t, state.playerTeamId)) {
+      // Eliminated — auto-sim all remaining rounds then transition immediately
+      for (let r = state.week; r <= maxRounds; r++) simRound(r);
+      state = checkPhaseTransition(state);
+    } else {
+      // Player still competing — one round per advance
+      simRound(state.week);
+      state.week++;
+      // If tournament just completed, stay to show results; transition on next advance
+      if (state.activeInternationalTournament?.phase !== 'complete') state = checkPhaseTransition(state);
     }
-    state = checkPhaseTransition(state);
     return state;
   }
 

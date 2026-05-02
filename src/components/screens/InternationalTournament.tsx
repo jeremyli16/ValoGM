@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { GameState, InternationalTournament, PlayoffBracket, PlayoffMatch } from '../../types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -25,27 +25,19 @@ function TeamRow({ teamId, t, state, won, score }: {
   won: boolean | null;
   score: number | null;
 }) {
-  const team   = teamId ? state.teams.get(teamId) : null;
-  const seed   = teamId ? t.qualifiedTeams.find(s => s.teamId === teamId) : null;
+  const team     = teamId ? state.teams.get(teamId) : null;
+  const seed     = teamId ? t.qualifiedTeams.find(s => s.teamId === teamId) : null;
   const isPlayer = teamId === state.playerTeamId;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '3px 0', opacity: won === false ? 0.4 : 1,
-    }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '3px 0', opacity: won === false ? 0.4 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 8, minWidth: 30, flexShrink: 0,
-          color: seed ? REGION_COLOR[seed.region] : 'transparent',
-        }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, minWidth: 30, flexShrink: 0, color: seed ? REGION_COLOR[seed.region] : 'transparent' }}>
           {seed ? REGION_ABBR[seed.region] : ''}
         </span>
         <span style={{
           fontSize: 11, fontWeight: (isPlayer || won === true) ? 700 : 400,
-          color: !teamId ? 'var(--text-secondary)'
-               : isPlayer ? 'var(--teal)'
-               : 'var(--text-primary)',
+          color: !teamId ? 'var(--text-secondary)' : isPlayer ? 'var(--teal)' : 'var(--text-primary)',
           fontStyle: !teamId ? 'italic' : 'normal',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
@@ -53,11 +45,7 @@ function TeamRow({ teamId, t, state, won, score }: {
         </span>
       </div>
       {score !== null && (
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 12, marginLeft: 6, flexShrink: 0,
-          fontWeight: won === true ? 700 : 400,
-          color: won === true ? 'var(--teal)' : 'var(--text-dim)',
-        }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, marginLeft: 6, flexShrink: 0, fontWeight: won === true ? 700 : 400, color: won === true ? 'var(--teal)' : 'var(--text-dim)' }}>
           {score}
         </span>
       )}
@@ -80,11 +68,7 @@ function MatchCard({ id, bracket, t, state, label }: {
   return (
     <div className="card" style={{ padding: '7px 9px', borderColor: hasPlayer ? 'var(--teal-dim)' : undefined }}>
       {label && (
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', marginBottom: 4,
-          fontFamily: 'var(--font-head)', fontSize: 8,
-          color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase',
-        }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontFamily: 'var(--font-head)', fontSize: 8, color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           <span>{label}</span>
           <span style={{ color: 'var(--text-dim)' }}>{m.format.toUpperCase()}</span>
         </div>
@@ -98,25 +82,23 @@ function MatchCard({ id, bracket, t, state, label }: {
 
 function SectionTitle({ children, color }: { children: React.ReactNode; color?: string }) {
   return (
-    <div style={{
-      fontFamily: 'var(--font-head)', fontSize: 11, textTransform: 'uppercase',
-      letterSpacing: '0.08em', color: color ?? 'var(--text-secondary)',
-      marginBottom: 10, borderBottom: '1px solid var(--border-dim)', paddingBottom: 5,
-    }}>
+    <div style={{ fontFamily: 'var(--font-head)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: color ?? 'var(--text-secondary)', marginBottom: 10, borderBottom: '1px solid var(--border-dim)', paddingBottom: 5 }}>
       {children}
     </div>
   );
 }
 
-function Col({ label, children }: { label: string; children: React.ReactNode }) {
+function Col({ label, sublabel, children }: { label: string; sublabel?: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        fontFamily: 'var(--font-head)', fontSize: 8, textTransform: 'uppercase',
-        letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6,
-      }}>
+      <div style={{ fontFamily: 'var(--font-head)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6 }}>
         {label}
       </div>
+      {sublabel && (
+        <div style={{ fontFamily: 'var(--font-head)', fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4, opacity: 0.7 }}>
+          {sublabel}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>
     </div>
   );
@@ -135,6 +117,14 @@ function swissRec(teamId: string, matches: PlayoffMatch[]) {
   return { w, l };
 }
 
+function PoolLabel({ label, color }: { label: string; color?: string }) {
+  return (
+    <div style={{ fontFamily: 'var(--font-head)', fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.1em', color: color ?? 'var(--text-dim)', marginTop: 8, marginBottom: 4 }}>
+      {label}
+    </div>
+  );
+}
+
 function SwissView({ t, state }: { t: InternationalTournament; state: GameState }) {
   const bracket = t.playInBracket;
   if (!bracket) return <div className="text-dim text-sm">Play-in not started.</div>;
@@ -148,15 +138,37 @@ function SwissView({ t, state }: { t: InternationalTournament; state: GameState 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+
+        {/* R1 — flat 4 matches */}
         <Col label="Round 1">
           {['SW_R1_0', 'SW_R1_1', 'SW_R1_2', 'SW_R1_3'].map(c)}
         </Col>
-        <Col label="Round 2">
-          {['SW_R2_0', 'SW_R2_1', 'SW_R2_2', 'SW_R2_3'].map(c)}
-        </Col>
-        <Col label="Round 3">
-          {['SW_R3_0', 'SW_R3_1'].map(c)}
-        </Col>
+
+        {/* R2 — split by pool */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontFamily: 'var(--font-head)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6 }}>
+            Round 2
+          </div>
+          <PoolLabel label="1-0 Pool" color="var(--teal)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {['SW_R2_0', 'SW_R2_1'].map(c)}
+          </div>
+          <PoolLabel label="0-1 Pool" color="var(--red)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {['SW_R2_2', 'SW_R2_3'].map(c)}
+          </div>
+        </div>
+
+        {/* R3 — 1-1 pool */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontFamily: 'var(--font-head)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6 }}>
+            Round 3
+          </div>
+          <PoolLabel label="1-1 Pool" color="var(--amber)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {['SW_R3_0', 'SW_R3_1'].map(c)}
+          </div>
+        </div>
       </div>
 
       {(qualified.length > 0 || eliminated.length > 0) && (
@@ -213,13 +225,9 @@ function ChampionsGroupsView({ t, state }: { t: InternationalTournament; state: 
         const gfMatch = bracket.matches.find(m => m.id === `CG_${g}_GF`);
         const winner  = gfMatch?.result ? (gfMatch.result.winner === 'A' ? gfMatch.teamAId : gfMatch.teamBId) : null;
         const ru      = gfMatch?.result ? (gfMatch.result.winner === 'A' ? gfMatch.teamBId : gfMatch.teamAId) : null;
-
         return (
           <div key={g}>
-            <div style={{
-              fontFamily: 'var(--font-head)', fontSize: 9, textTransform: 'uppercase',
-              letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: 6,
-            }}>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: 6 }}>
               {GROUP_LABELS[g]}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -248,21 +256,12 @@ function ChampionsGroupsView({ t, state }: { t: InternationalTournament; state: 
   );
 }
 
-// ─── Double-Elim Bracket (Masters main + Champions playoff) ───────────────────
+// ─── Double-Elim Bracket ─────────────────────────────────────────────────────
 
 function DEBracketView({ bracket, t, state, ubR1, ubR1Label, ubSf, ubF, lbR1, lbQf, lbSf, lbF, gf }: {
-  bracket: PlayoffBracket;
-  t: InternationalTournament;
-  state: GameState;
-  ubR1: string[];
-  ubR1Label?: string;
-  ubSf: string[];
-  ubF: string;
-  lbR1: string[];
-  lbQf: string[];
-  lbSf: string;
-  lbF: string;
-  gf: string;
+  bracket: PlayoffBracket; t: InternationalTournament; state: GameState;
+  ubR1: string[]; ubR1Label?: string; ubSf: string[]; ubF: string;
+  lbR1: string[]; lbQf: string[]; lbSf: string; lbF: string; gf: string;
 }) {
   const c = (id: string) => <MatchCard key={id} id={id} bracket={bracket} t={t} state={state} />;
   const champion = bracket.champion ? state.teams.get(bracket.champion) : null;
@@ -290,17 +289,9 @@ function DEBracketView({ bracket, t, state, ubR1, ubR1Label, ubSf, ubF, lbR1, lb
         <SectionTitle color="var(--amber)">Grand Final</SectionTitle>
         <div style={{ maxWidth: 230 }}>{c(gf)}</div>
         {champion && (
-          <div style={{
-            maxWidth: 230, marginTop: 8, padding: '10px 14px',
-            background: 'var(--teal-dim)', border: '1px solid var(--teal)',
-          }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>
-              Champion
-            </div>
-            <div style={{
-              fontFamily: 'var(--font-head)', fontSize: 16,
-              color: bracket.champion === state.playerTeamId ? 'var(--teal)' : 'var(--text-primary)',
-            }}>
+          <div style={{ maxWidth: 230, marginTop: 8, padding: '10px 14px', background: 'var(--teal-dim)', border: '1px solid var(--teal)' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--teal)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Champion</div>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: 16, color: bracket.champion === state.playerTeamId ? 'var(--teal)' : 'var(--text-primary)' }}>
               {champion.name}
             </div>
           </div>
@@ -312,29 +303,77 @@ function DEBracketView({ bracket, t, state, ubR1, ubR1Label, ubSf, ubF, lbR1, lb
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export function InternationalTournament({ state, tournament }: Props) {
-  const t = tournament ?? state.activeInternationalTournament;
+export function InternationalTournament({ state, tournament: tournamentProp }: Props) {
+  // Build full tournament list: active first, then history newest→oldest
+  const allTournaments = useMemo(() => {
+    const list: InternationalTournament[] = [];
+    if (state.activeInternationalTournament) list.push(state.activeInternationalTournament);
+    [...state.tournamentHistory].reverse().forEach(t => list.push(t));
+    return list;
+  }, [state.activeInternationalTournament, state.tournamentHistory]);
 
-  const defaultTab = t && (t.phase === 'main_event' || (t.phase === 'complete' && t.mainBracket))
-    ? 'main_event' : 'play_in';
-  const [tab, setTab] = useState<'play_in' | 'main_event'>(defaultTab);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const t = tournamentProp ?? allTournaments[selectedIdx] ?? null;
+
+  const [tab, setTab] = useState<'play_in' | 'main_event'>(() =>
+    t && (t.phase === 'main_event' || (t.phase === 'complete' && t.mainBracket)) ? 'main_event' : 'play_in'
+  );
+
+  // Auto-switch to main_event tab when that phase begins
+  useEffect(() => {
+    if (t?.phase === 'main_event') setTab('main_event');
+  }, [t?.phase, t?.id]);
+
+  // Reset to first tournament when a new one becomes active
+  useEffect(() => {
+    setSelectedIdx(0);
+  }, [allTournaments.length]);
 
   if (!t) {
     return (
       <div style={{ height: '100%', padding: 16 }}>
-        <div className="text-dim text-sm">No active international tournament. Check back after regional playoffs.</div>
+        <div className="text-dim text-sm">No international tournaments yet. Check back after regional playoffs.</div>
       </div>
     );
   }
 
-  const isMasters = t.name !== 'Champions';
-  const champion  = t.champion ? state.teams.get(t.champion) : null;
-  const phaseLabel = t.phase === 'play_in'
-    ? (isMasters ? 'Play-in' : 'Group Stage')
-    : t.phase === 'main_event' ? 'Main Event' : 'Complete';
+  const isMasters   = t.name !== 'Champions';
+  const champion    = t.champion ? state.teams.get(t.champion) : null;
+  const isActive    = state.activeInternationalTournament?.id === t.id;
+  const phaseLabel  = t.phase === 'play_in' ? (isMasters ? 'Play-in' : 'Group Stage')
+                    : t.phase === 'main_event' ? 'Main Event' : 'Complete';
 
   return (
     <div style={{ height: '100%', padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Tournament selector — shown when there are multiple to view */}
+      {!tournamentProp && allTournaments.length > 1 && (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', paddingBottom: 10, borderBottom: '1px solid var(--border-dim)' }}>
+          {allTournaments.map((tournament, idx) => {
+            const isLive = state.activeInternationalTournament?.id === tournament.id;
+            const isSel  = idx === selectedIdx;
+            return (
+              <button
+                key={tournament.id}
+                className={`btn ${isSel ? 'btn-red' : ''}`}
+                style={{ fontSize: 10 }}
+                onClick={() => {
+                  setSelectedIdx(idx);
+                  setTab(tournament.phase === 'main_event' || (tournament.phase === 'complete' && tournament.mainBracket) ? 'main_event' : 'play_in');
+                }}
+              >
+                {tournament.name}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: isSel ? undefined : 'var(--text-dim)', marginLeft: 4 }}>
+                  S{tournament.calendarSeason}
+                </span>
+                {isLive && (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--teal)', marginLeft: 4, letterSpacing: '0.06em' }}>LIVE</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -349,34 +388,25 @@ export function InternationalTournament({ state, tournament }: Props) {
         </span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-dim)' }}>
           Season {t.calendarSeason}
+          {isActive && <span style={{ color: 'var(--teal)', marginLeft: 6 }}>LIVE</span>}
         </span>
       </div>
 
       {/* Champion banner */}
       {champion && (
-        <div style={{
-          padding: '9px 14px', background: 'var(--teal-dim)', border: '1px solid var(--teal)',
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
+        <div style={{ padding: '9px 14px', background: 'var(--teal-dim)', border: '1px solid var(--teal)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, color: 'var(--teal)', letterSpacing: '0.1em', textTransform: 'uppercase', flexShrink: 0 }}>
             {t.name} Champion
           </span>
-          <span style={{
-            fontFamily: 'var(--font-head)', fontSize: 16,
-            color: t.champion === state.playerTeamId ? 'var(--teal)' : 'var(--text-primary)',
-          }}>
+          <span style={{ fontFamily: 'var(--font-head)', fontSize: 16, color: t.champion === state.playerTeamId ? 'var(--teal)' : 'var(--text-primary)' }}>
             {champion.name}
           </span>
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Stage tabs */}
       <div style={{ display: 'flex', gap: 4 }}>
-        <button
-          className={`btn ${tab === 'play_in' ? 'btn-red' : ''}`}
-          style={{ fontSize: 11 }}
-          onClick={() => setTab('play_in')}
-        >
+        <button className={`btn ${tab === 'play_in' ? 'btn-red' : ''}`} style={{ fontSize: 11 }} onClick={() => setTab('play_in')}>
           {isMasters ? 'Swiss Stage' : 'Group Stage'}
         </button>
         <button
@@ -389,29 +419,22 @@ export function InternationalTournament({ state, tournament }: Props) {
       </div>
 
       {/* Content */}
-      {tab === 'play_in' && isMasters && <SwissView t={t} state={state} />}
-      {tab === 'play_in' && !isMasters && <ChampionsGroupsView t={t} state={state} />}
+      {tab === 'play_in'   &&  isMasters && <SwissView t={t} state={state} />}
+      {tab === 'play_in'   && !isMasters && <ChampionsGroupsView t={t} state={state} />}
 
       {tab === 'main_event' && t.mainBracket && isMasters && (
-        <DEBracketView
-          bracket={t.mainBracket} t={t} state={state}
-          ubR1={['MN_UBR1_A', 'MN_UBR1_B', 'MN_UBR1_C', 'MN_UBR1_D']}
-          ubSf={['MN_UBSF1', 'MN_UBSF2']}
-          ubF="MN_UBF"
-          lbR1={['MN_LBR1_A', 'MN_LBR1_B']}
-          lbQf={['MN_LBQF_A', 'MN_LBQF_B']}
+        <DEBracketView bracket={t.mainBracket} t={t} state={state}
+          ubR1={['MN_UBR1_A','MN_UBR1_B','MN_UBR1_C','MN_UBR1_D']}
+          ubSf={['MN_UBSF1','MN_UBSF2']} ubF="MN_UBF"
+          lbR1={['MN_LBR1_A','MN_LBR1_B']} lbQf={['MN_LBQF_A','MN_LBQF_B']}
           lbSf="MN_LBSF" lbF="MN_LBF" gf="MN_GF"
         />
       )}
       {tab === 'main_event' && t.mainBracket && !isMasters && (
-        <DEBracketView
-          bracket={t.mainBracket} t={t} state={state}
-          ubR1={['CP_UBQF_A', 'CP_UBQF_B', 'CP_UBQF_C', 'CP_UBQF_D']}
-          ubR1Label="Quarterfinals"
-          ubSf={['CP_UBSF1', 'CP_UBSF2']}
-          ubF="CP_UBF"
-          lbR1={['CP_LBR1_A', 'CP_LBR1_B']}
-          lbQf={['CP_LBQF_A', 'CP_LBQF_B']}
+        <DEBracketView bracket={t.mainBracket} t={t} state={state}
+          ubR1={['CP_UBQF_A','CP_UBQF_B','CP_UBQF_C','CP_UBQF_D']} ubR1Label="Quarterfinals"
+          ubSf={['CP_UBSF1','CP_UBSF2']} ubF="CP_UBF"
+          lbR1={['CP_LBR1_A','CP_LBR1_B']} lbQf={['CP_LBQF_A','CP_LBQF_B']}
           lbSf="CP_LBSF" lbF="CP_LBF" gf="CP_GF"
         />
       )}

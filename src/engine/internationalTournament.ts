@@ -631,51 +631,70 @@ function simMatchIds(ids: string[], bracket: PlayoffBracket, state: GameState, r
   }
 }
 
-export function simMastersWeek(
+// Masters: 6 rounds
+// 1: Swiss R1+R2  2: Swiss R3  3: Main UBR1+LBR1  4: UBSF+LBQF  5: UBF+LBSF  6: LBF+GF
+export function simMastersRound(
   tournament: InternationalTournament,
   state: GameState,
   rng: SeededRng,
-  week: 1 | 2 | 3,
+  round: number,
 ): void {
-  if (week === 1) {
+  if (round === 1) {
     initSwissStage(tournament, rng);
     simSwissRound(tournament, state, rng, 1);
     simSwissRound(tournament, state, rng, 2);
     tournament.phase = 'play_in';
-  } else if (week === 2) {
+  } else if (round === 2) {
     simSwissRound(tournament, state, rng, 3);
+  } else if (round === 3) {
     if (!tournament.seedOneChoice) pickAIS1Choice(tournament, state);
     buildMastersMainBracket(tournament, state);
     const bracket = tournament.mainBracket!;
     simMatchIds(['MN_UBR1_A','MN_UBR1_B','MN_UBR1_C','MN_UBR1_D','MN_LBR1_A','MN_LBR1_B'], bracket, state, rng);
     tournament.phase = 'main_event';
-  } else {
-    const bracket = tournament.mainBracket;
-    if (!bracket) return;
-    simMatchIds(['MN_UBSF1','MN_UBSF2','MN_LBQF_A','MN_LBQF_B','MN_UBF','MN_LBSF','MN_LBF','MN_GF'], bracket, state, rng);
+  } else if (round === 4) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_UBSF1','MN_UBSF2','MN_LBQF_A','MN_LBQF_B'], bracket, state, rng);
+  } else if (round === 5) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_UBF','MN_LBSF'], bracket, state, rng);
+  } else if (round === 6) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_LBF','MN_GF'], bracket, state, rng);
     finalizeTournament(tournament, bracket, 'MN_GF');
   }
 }
 
-export function simChampionsWeek(
+export const MASTERS_ROUNDS   = 6;
+
+// Champions: 5 rounds
+// 1: Groups  2: UBQF+LBR1  3: UBSF+LBQF  4: UBF+LBSF  5: LBF+GF
+export function simChampionsRound(
   tournament: InternationalTournament,
   state: GameState,
   rng: SeededRng,
-  week: 1 | 2 | 3,
+  round: number,
 ): void {
-  if (week === 1) {
+  if (round === 1) {
     initChampionsGroups(tournament, rng);
     simChampionsGroups(tournament, state, rng);
     tournament.phase = 'play_in';
-  } else if (week === 2) {
+  } else if (round === 2) {
     buildChampionsPlayoffBracket(tournament, rng);
     const bracket = tournament.mainBracket!;
     simMatchIds(['CP_UBQF_A','CP_UBQF_B','CP_UBQF_C','CP_UBQF_D','CP_LBR1_A','CP_LBR1_B'], bracket, state, rng);
     tournament.phase = 'main_event';
-  } else {
-    const bracket = tournament.mainBracket;
-    if (!bracket) return;
-    simMatchIds(['CP_UBSF1','CP_UBSF2','CP_LBQF_A','CP_LBQF_B','CP_UBF','CP_LBSF','CP_LBF','CP_GF'], bracket, state, rng);
+  } else if (round === 3) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_UBSF1','CP_UBSF2','CP_LBQF_A','CP_LBQF_B'], bracket, state, rng);
+  } else if (round === 4) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_UBF','CP_LBSF'], bracket, state, rng);
+  } else if (round === 5) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_LBF','CP_GF'], bracket, state, rng);
     finalizeTournament(tournament, bracket, 'CP_GF');
   }
 }
+
+export const CHAMPIONS_ROUNDS = 5;
