@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { GameState, SplitRecord, SeasonRecord, PlayerRole, StandingsRow } from '../../types';
+import type { GameState, SplitRecord, SeasonRecord, PlayerRole, StandingsRow, InternationalTournament } from '../../types';
 
 const ROLE_COLORS: Record<PlayerRole, string> = {
   duelist:    'var(--role-duelist)',
@@ -115,7 +115,14 @@ function SplitStandings({ gameSeason, state }: { gameSeason: number; state: Game
 
 // ─── Split row ────────────────────────────────────────────────────────────────
 
-function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
+function SplitRow({
+  split, state, tournament, onViewTournament,
+}: {
+  split: SplitRecord;
+  state: GameState;
+  tournament?: InternationalTournament;
+  onViewTournament?: (t: InternationalTournament) => void;
+}) {
   const [showStandings, setShowStandings] = useState(false);
   const winner    = teamName(state, split.winnerTeamId);
   const runnerUp  = teamName(state, split.runnerUpTeamId);
@@ -123,12 +130,14 @@ function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
   const mvpTeam   = playerTeam(state, split.mvpPlayerId);
   const mvpRole   = playerRole(state, split.mvpPlayerId);
   const gameSeason = (split.calendarSeason - 1) * 3 + split.splitNum;
+  const tChampion  = tournament?.champion ? teamName(state, tournament.champion) : null;
+  const tName      = tournament?.name;
 
   return (
     <div style={{ borderBottom: '1px solid var(--border-dim)' }}>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '70px 1fr 1fr 1fr auto',
+        gridTemplateColumns: '70px 1fr 1fr 1fr 1fr auto',
         gap: 12,
         alignItems: 'center',
         padding: '10px 0',
@@ -154,13 +163,43 @@ function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
           </div>
           {mvpTeam && <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{mvpTeam}</div>}
         </div>
-        <button
-          className="btn"
-          style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-dim)' }}
-          onClick={() => setShowStandings(s => !s)}
-        >
-          {showStandings ? 'Hide' : 'Standings'}
-        </button>
+        <div>
+          {tName && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <span style={{
+                  fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em',
+                  color: tName === 'Champions' ? 'var(--amber)' : 'var(--teal)',
+                  border: `1px solid ${tName === 'Champions' ? 'var(--amber)' : 'var(--teal)'}`,
+                  padding: '1px 5px',
+                }}>
+                  {tName.toUpperCase()}
+                </span>
+              </div>
+              {tChampion && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{tChampion}</div>
+              )}
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+          <button
+            className="btn"
+            style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-dim)' }}
+            onClick={() => setShowStandings(s => !s)}
+          >
+            {showStandings ? 'Hide' : 'Standings'}
+          </button>
+          {tournament && onViewTournament && (
+            <button
+              className="btn btn-teal"
+              style={{ fontSize: 10, padding: '2px 8px' }}
+              onClick={() => onViewTournament(tournament)}
+            >
+              View Bracket
+            </button>
+          )}
+        </div>
       </div>
       {showStandings && (
         <div style={{ paddingBottom: 12 }}>
@@ -174,12 +213,14 @@ function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
 // ─── Season block ─────────────────────────────────────────────────────────────
 
 function SeasonBlock({
-  season, record, splits, state,
+  season, record, splits, state, onViewTournament, tournamentsBySplit,
 }: {
   season: number;
   record: SeasonRecord | null;
   splits: SplitRecord[];
   state: GameState;
+  onViewTournament?: (t: InternationalTournament) => void;
+  tournamentsBySplit: Map<string, InternationalTournament>;
 }) {
   const champion = record ? teamName(state, record.championTeamId) : null;
   const playerTeamId = state.playerTeamId;
@@ -245,7 +286,13 @@ function SeasonBlock({
             SPLITS
           </div>
           {splits.map(split => (
-            <SplitRow key={`${split.calendarSeason}-${split.splitNum}`} split={split} state={state} />
+            <SplitRow
+              key={`${split.calendarSeason}-${split.splitNum}`}
+              split={split}
+              state={state}
+              tournament={tournamentsBySplit.get(`${split.calendarSeason}-${split.splitNum}`)}
+              onViewTournament={onViewTournament}
+            />
           ))}
         </div>
       )}
@@ -255,7 +302,7 @@ function SeasonBlock({
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
-export function LeagueHistory({ state }: { state: GameState }) {
+export function LeagueHistory({ state, onViewTournament }: { state: GameState; onViewTournament?: (t: InternationalTournament) => void }) {
   const { splitHistory, seasonHistory } = state;
 
   if (seasonHistory.length === 0 && splitHistory.length === 0) {
@@ -275,6 +322,16 @@ export function LeagueHistory({ state }: { state: GameState }) {
   for (const s of splitHistory) {
     if (!splitsBySeason.has(s.calendarSeason)) splitsBySeason.set(s.calendarSeason, []);
     splitsBySeason.get(s.calendarSeason)!.push(s);
+  }
+
+  // Build lookup: "calendarSeason-splitNum" → tournament
+  const tournamentsBySplit = new Map<string, InternationalTournament>();
+  const allTournaments = [
+    ...state.tournamentHistory,
+    ...(state.activeInternationalTournament ? [state.activeInternationalTournament] : []),
+  ];
+  for (const t of allTournaments) {
+    tournamentsBySplit.set(`${t.calendarSeason}-${t.splitNum}`, t);
   }
 
   const allSeasons = new Set([
@@ -298,6 +355,8 @@ export function LeagueHistory({ state }: { state: GameState }) {
             record={record}
             splits={splits}
             state={state}
+            onViewTournament={onViewTournament}
+            tournamentsBySplit={tournamentsBySplit}
           />
         );
       })}

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { GameState, RegionId, Player, CoachRole } from './types';
+import type { GameState, RegionId, Player, CoachRole, InternationalTournament as ITournament } from './types';
 import { HOME_NATIONALITIES } from './types';
 import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer, isTeamAliveInTournament } from './engine/gameLoop';
 import { initNewGameDb, persistGameState } from './db/repos';
@@ -25,6 +25,7 @@ export function App() {
   const [nav, setNav] = useState<NavItem>('dashboard');
   const [loading, setLoading] = useState(false);
   const [importViolators, setImportViolators] = useState<Player[]>([]);
+  const [viewingTournament, setViewingTournament] = useState<ITournament | null>(null);
 
   const lockedPlayerIds = useMemo(() => {
     const t = gameState?.phase === 'inter_tournament' ? gameState.activeInternationalTournament : null;
@@ -176,6 +177,11 @@ export function App() {
     await persistGameState(next);
   }, [gameState]);
 
+  const handleViewTournament = useCallback((t: ITournament) => {
+    setViewingTournament(t);
+    setNav('tournament');
+  }, []);
+
   const handleAdvanceWeek = useCallback(async () => {
     if (!gameState) return;
 
@@ -220,7 +226,7 @@ export function App() {
 
   return (
     <>
-      <Layout state={gameState} active={nav} onNav={setNav} onAdvanceWeek={handleAdvanceWeek}>
+      <Layout state={gameState} active={nav} onNav={n => { if (n !== 'tournament') setViewingTournament(null); setNav(n); }} onAdvanceWeek={handleAdvanceWeek}>
         {nav === 'dashboard'  && <Dashboard  state={gameState} />}
         {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} onReleasePlayer={handleReleasePlayer} />}
         {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} onMakeOffer={handleMakeOffer} lockedPlayerIds={lockedPlayerIds} outgoingBlocked={playerOutgoingTransfersBlocked} />}
@@ -228,11 +234,11 @@ export function App() {
         {nav === 'standings'  && <Standings  state={gameState} />}
         {nav === 'schedule'   && <Schedule   state={gameState} />}
         {nav === 'playoffs'   && <Playoffs      state={gameState} />}
-        {nav === 'history'    && <LeagueHistory state={gameState} />}
+        {nav === 'history'    && <LeagueHistory state={gameState} onViewTournament={handleViewTournament} />}
         {nav === 'finances'   && <Finances state={gameState} onSubmitRenewal={handleSubmitRenewal} />}
         {nav === 'tactics'    && <Tactics state={gameState} onSetPracticeAllocation={handleSetPracticeAllocation} onSetMapComp={handleSetMapComp} />}
         {nav === 'stats'      && <Stats state={gameState} />}
-        {nav === 'tournament' && <InternationalTournament state={gameState} />}
+        {nav === 'tournament' && <InternationalTournament state={gameState} tournament={viewingTournament ?? undefined} />}
       </Layout>
 
       {importViolators.length > 0 && (
