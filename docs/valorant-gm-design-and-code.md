@@ -68,7 +68,7 @@ Valorant GM is a single-player, browser-based esports general manager game in th
 type PlayerRole = 'duelist' | 'initiator' | 'controller' | 'sentinel';
 type BuyType = 'fullBuy' | 'halfBuy' | 'forceBuy' | 'eco' | 'pistol';
 type RegionId = 'americas' | 'emea' | 'pacific' | 'china';
-type GamePhase = 'preseason' | 'regular_season' | 'playoffs' | 'offseason';
+type GamePhase = 'preseason' | 'regular_season' | 'playoffs' | 'inter_tournament' | 'offseason';
 type PlayerArchetype = 'prodigy' | 'star' | 'veteran' | 'journeyman' | 'specialist';
 ```
 
@@ -821,8 +821,9 @@ function getGrandFinalFatigueMod(lowerFinal: PlayoffMatch): { upperMod: number; 
 ```typescript
 interface GameState {
   phase: GamePhase;
-  season: number;
-  act: number;          // 1–3
+  season: number;          // game-season (increments each split)
+  calendarSeason: number;  // calendar year (1 per 3 splits)
+  splitNum: number;        // 1–3 within the calendar year
   week: number;
 
   playerTeamId: string;
@@ -833,40 +834,75 @@ interface GameState {
   players:   Map<string, Player>;
   teams:     Map<string, Team>;
   orgs:      Map<string, Organization>;
-  leagues:   Map<string, League>;
+  leagues:   Map<string, League>;   // all 4 regions
   contracts: Map<string, Contract>;
   matches:   Map<string, ScheduledMatch>;
+  standings: StandingsRow[];        // all seasons, all regions
 
   freeAgents:       string[];
-  pendingDecisions: Decision[];
   notifications:    Notification[];
   transferOffers:   TransferOffer[];
   playoffBracket:   PlayoffBracket | null;
+  otherPlayoffBrackets: Map<string, PlayoffBracket>;  // other 3 regions
+
+  // History
+  splitHistory:   SplitRecord[];    // one per completed split (player region)
+  seasonHistory:  SeasonRecord[];   // one per completed calendar year (player region)
+
+  // International tournaments
+  activeInternationalTournament: InternationalTournament | null;
+  tournamentHistory: InternationalTournament[];
+  championsPoints: Map<string, number>;  // teamId → cumulative points
+
+  // Active map pool (7 of 12)
+  activeMapPool: string[];
 
   dirtyPlayers: Set<string>;   // for efficient saves
   dirtyMatches: Set<string>;
+}
+
+interface SplitRecord {
+  calendarSeason: number;
+  splitNum: number;
+  winnerTeamId: string;
+  runnerUpTeamId: string;
+  mvpPlayerId: string;
+}
+
+interface SeasonRecord {
+  season: number;
+  championTeamId: string;
+  mvpPlayerId: string;
+  bestDuelistId: string;
+  bestInitiatorId: string;
+  bestControllerId: string;
+  bestSentinelId: string;
 }
 ```
 
 ### 6.2 Phase Machine
 
 ```
-preseason → regular_season → playoffs → offseason → preseason (next season)
+preseason → regular_season → playoffs → inter_tournament → [offseason →] preseason (next split)
 ```
 
-Seasons have 3 acts of ~3 weeks each. Transfer windows open between acts.
+Three splits form one calendar year. After splits 1 and 2, a Masters tournament runs (`inter_tournament`). After split 3, Champions runs, then offseason before the next calendar year begins.
 
 ```typescript
 async function advanceWeek(state: GameState): Promise<GameState> {
   switch (state.phase) {
-    case 'preseason':      return runPreseasonWeek(state);
-    case 'regular_season': return runRegularSeasonWeek(state);
-    case 'playoffs':       return runPlayoffStage(state);
-    case 'offseason':      return runOffseasonWeek(state);
+    case 'preseason':         return runPreseasonWeek(state);
+    case 'regular_season':    return runRegularSeasonWeek(state);
+    case 'playoffs':          return runPlayoffStage(state);
+    case 'inter_tournament':  return runTournamentWeek(state);
+    case 'offseason':         return runOffseasonWeek(state);
   }
-  // Global every-week processes applied after each phase
 }
 ```
+
+**Background region simulation:** All 3 non-player regions run their regular-season matches each week alongside the player's league. When the player's league enters playoffs, the other 3 regions' full playoff brackets are auto-simulated in one shot. New schedules are generated for all 4 regions each split transition.
+
+**Map pool rotation:** At each new split, the active 7-map pool may rotate — 60% no change, 30% one swap, 10% two swaps. Incoming maps drawn from the 12-map reserve. A "Map Pool Update" notification names additions and removals.
 
 ### 6.3 Weekly Tick
 
@@ -1034,11 +1070,17 @@ All screens built in React with a shared dark tactical aesthetic:
 
 | Screen | Key interactions |
 |---|---|
-| **Dashboard** | Overview of standing, next match, budget, morale, expiring contracts, inbox |
-| **Roster** | Player list with ratings, click for detail panel; role ratings with confidence bars; contract status; promote/bench/release actions |
-| **Transfer market** | Filter by role/status/nationality; watchlist; offer form with acceptance likelihood; incoming offer cards with accept/counter/reject |
-| **Match day** | Pre-match (lineup, map pool, tactics) → Live view (round timeline, economy tracker, event feed) → Post-match (full scoreboard, series MVP) |
-| **Standings** | Group A/B tabs with sortable columns; playoff picture tab with seeding panel; my schedule tab with map-level scores |
+| **New Game** | Region, team, and seed selection |
+| **Dashboard** | Standing, next match, budget, morale, expiring contracts, notification inbox |
+| **Roster** | Player list with role ratings + confidence bars; detail panel with career stats, contract, salary; promote/bench/release/renew actions |
+| **Transfer Market** | Players tab (free agents + contracted; offer modal with buyout calc + acceptance likelihood); Coaches tab (hire/release head and assistant) |
+| **Schedule** | Full season match list; expandable rows with per-player stats; "this week" badge |
+| **Standings** | Region tab bar (AMR / EMEA / PAC / CHN); Group A/B side-by-side per region |
+| **Playoffs** | Projected bracket during regular season; live double-elimination bracket; upper + lower bracket with series scores |
+| **Stats** | Leaderboard from IndexedDB; filters: season, split, phase (All/Regular/Playoffs/International), role, team scope, region |
+| **Finances** | Contract list with renewal offers; coach contracts; budget summary |
+| **History** | Flat per-event table per season: Champions → Split 3 → Masters → Split 2 → … ; per-region rows always visible; collapsible season awards |
+| **International Tournament** | Swiss play-in grid; double-elim main bracket; Champions group stage + playoff bracket; navigable from History |
 
 ### Data wiring (mock → production)
 
@@ -1074,13 +1116,14 @@ The **game loop** advances weekly through preseason, regular season, playoffs, a
 
 Five **React UI screens** were built to production quality: a war room dashboard, roster management with scouted role rating bars, a transfer market with real-time offer likelihood feedback, a match day screen with round-by-round playback and economy tracking, and a standings screen with group tabs, playoff picture, and schedule view.
 
+**What is complete:**
+
+All 11 screens are live and wired to real IndexedDB data. The full split → Masters → split → Masters → split → Champions calendar loop is implemented and playable. International tournament simulation, bracket display, per-match stat accumulation, tournament MVP selection, and history/stats/standings integration are all done. Map pool practice allocation is wired through the UI. Multi-season persistence with split and season archive records is complete.
+
 **What remains to build:**
-- Finances & sponsorships screen
-- Scouting screen (assign scouts, review reports)
-- Tactics screen (agent comp builder, map pool practice allocation)
-- Playoffs bracket visualisation
-- Challengers league and Ascension promotion/relegation
-- New game setup (choose region, org, difficulty)
-- Settings and save management
-- Wiring all screens to real IndexedDB data
-- Web Worker integration for the match sim
+- **Scouting screen:** active targeted scouting of opponent players; `scoutedRating` updates as players develop post-generation (passive confidence tick via coach is in place)
+- **Chemistry system:** `Team.chemistry` is tracked but unused; planned as ×(1 + chemistry/2000) modifier on team synergy bonus, ±2/week stable / −5 per transfer
+- **Challengers simulation:** schedule + standings for the 8 challengers teams per region; breakout players surfacing as transfer targets (no promotion/relegation)
+- **Injuries:** `Player` has no injury flag; all players always available
+- **Sponsorships / prize money:** `Organization.sponsorIncome` and `prizeEarnings` stored but not wired to the budget loop
+- **Web Worker integration:** match sim runs synchronously on the main thread; moving to a Worker keeps the UI responsive during long auto-sim sequences
