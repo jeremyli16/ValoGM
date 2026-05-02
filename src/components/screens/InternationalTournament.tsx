@@ -139,10 +139,16 @@ function SwissView({ t, state }: { t: InternationalTournament; state: GameState 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-        {/* R1 — flat 4 matches */}
-        <Col label="Round 1">
-          {['SW_R1_0', 'SW_R1_1', 'SW_R1_2', 'SW_R1_3'].map(c)}
-        </Col>
+        {/* R1 — 0-0 pool */}
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontFamily: 'var(--font-head)', fontSize: 8, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-dim)', marginBottom: 6 }}>
+            Round 1
+          </div>
+          <PoolLabel label="0-0 Pool" color="var(--text-secondary)" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {['SW_R1_0', 'SW_R1_1', 'SW_R1_2', 'SW_R1_3'].map(c)}
+          </div>
+        </div>
 
         {/* R2 — split by pool */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
