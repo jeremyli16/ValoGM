@@ -11,19 +11,34 @@ interface Props {
   children: ReactNode;
 }
 
-const NAV_ITEMS: { id: NavItem; label: string }[] = [
-  { id: 'dashboard',  label: 'Dashboard' },
-  { id: 'roster',     label: 'Roster' },
-  { id: 'transfers',  label: 'Market' },
-  { id: 'finances',   label: 'Finances' },
-  { id: 'tactics',    label: 'Tactics' },
-  { id: 'stats',      label: 'Stats' },
-  { id: 'matchday',   label: 'Matches' },
-  { id: 'standings',  label: 'Standings' },
-  { id: 'schedule',   label: 'Schedule' },
-  { id: 'playoffs',   label: 'Playoffs' },
-  { id: 'tournament', label: 'Worlds' },
-  { id: 'history',    label: 'History' },
+const NAV_GROUPS: { label: string; items: { id: NavItem; label: string }[] }[] = [
+  {
+    label: 'Manage',
+    items: [
+      { id: 'dashboard', label: 'Dashboard' },
+      { id: 'roster',    label: 'Roster' },
+      { id: 'transfers', label: 'Market' },
+      { id: 'finances',  label: 'Finances' },
+      { id: 'tactics',   label: 'Tactics' },
+    ],
+  },
+  {
+    label: 'Compete',
+    items: [
+      { id: 'matchday',   label: 'Matches' },
+      { id: 'schedule',   label: 'Schedule' },
+      { id: 'standings',  label: 'Standings' },
+      { id: 'playoffs',   label: 'Playoffs' },
+      { id: 'tournament', label: 'Worlds' },
+    ],
+  },
+  {
+    label: 'Review',
+    items: [
+      { id: 'stats',   label: 'Stats' },
+      { id: 'history', label: 'History' },
+    ],
+  },
 ];
 
 function phaseTag(state: GameState) {
@@ -79,54 +94,68 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
         </div>
 
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 0' }}>
-          {NAV_ITEMS.map(item => {
-            const isActive = active === item.id;
-            const label = item.id === 'tournament' ? tournamentLabel : item.label;
-            return (
-              <div
-                key={item.id}
-                className={`nav-item${isActive ? ' nav-active' : ''}`}
-                onClick={() => onNav(item.id)}
-                style={{
-                  position: 'relative',
-                  padding: '9px 14px 9px 17px',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-head)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                }}
-              >
-                {isActive && (
-                  <div style={{
-                    position: 'absolute',
-                    left: 0, top: 0, bottom: 0,
-                    width: 3,
-                    background: 'var(--red)',
-                  }} />
-                )}
-                {label}
-                {item.id === 'dashboard' && unread > 0 && (
-                  <span style={{
-                    background: 'var(--red)', color: '#fff',
-                    fontFamily: 'var(--font-mono)', fontSize: 10,
-                    padding: '1px 5px', borderRadius: 10,
-                  }}>{unread}</span>
-                )}
-                {item.id === 'finances' && pendingRenewals > 0 && (
-                  <span style={{
-                    background: 'var(--amber)', color: '#000',
-                    fontFamily: 'var(--font-mono)', fontSize: 10,
-                    padding: '1px 5px', borderRadius: 10,
-                  }}>{pendingRenewals}</span>
-                )}
+        <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={group.label} style={{ marginTop: gi > 0 ? 4 : 0 }}>
+              <div style={{
+                padding: '6px 14px 3px',
+                fontSize: 9,
+                fontFamily: 'var(--font-head)',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                color: 'var(--text-dim)',
+              }}>
+                {group.label}
               </div>
-            );
-          })}
+              {group.items.map(item => {
+                const isActive = active === item.id;
+                const label = item.id === 'tournament' ? tournamentLabel : item.label;
+                return (
+                  <div
+                    key={item.id}
+                    className={`nav-item${isActive ? ' nav-active' : ''}`}
+                    onClick={() => onNav(item.id)}
+                    style={{
+                      position: 'relative',
+                      padding: '8px 14px 8px 20px',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-head)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    }}
+                  >
+                    {isActive && (
+                      <div style={{
+                        position: 'absolute',
+                        left: 0, top: 0, bottom: 0,
+                        width: 3,
+                        background: 'var(--red)',
+                      }} />
+                    )}
+                    {label}
+                    {item.id === 'dashboard' && unread > 0 && (
+                      <span style={{
+                        background: 'var(--red)', color: '#fff',
+                        fontFamily: 'var(--font-mono)', fontSize: 10,
+                        padding: '1px 5px', borderRadius: 10,
+                      }}>{unread}</span>
+                    )}
+                    {item.id === 'finances' && pendingRenewals > 0 && (
+                      <span style={{
+                        background: 'var(--amber)', color: '#000',
+                        fontFamily: 'var(--font-mono)', fontSize: 10,
+                        padding: '1px 5px', borderRadius: 10,
+                      }}>{pendingRenewals}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer */}
