@@ -1,17 +1,11 @@
 import { useState } from 'react';
-import type { GameState } from '../../types';
-import { MAP_POOL, ROLE_AGENTS, PRACTICE_BUDGET } from '../../types';
+import type { GameState, Player, PlayerRole } from '../../types';
+import { MAP_POOL, ROLE_AGENTS, AGENT_ROLE, PRACTICE_BUDGET } from '../../types';
 
 interface Props {
   state: GameState;
   onSetPracticeAllocation: (allocation: Record<string, number>) => void;
   onSetMapComp: (mapName: string, agents: string[]) => void;
-}
-
-// Map agent name → role
-const AGENT_ROLE: Record<string, string> = {};
-for (const [role, agents] of Object.entries(ROLE_AGENTS)) {
-  for (const a of agents) AGENT_ROLE[a] = role;
 }
 
 function scoreColor(score: number): string {
@@ -167,6 +161,43 @@ function MapPoolPanel({ state, onSet }: {
 
 // ─── Agent Comp Panel ─────────────────────────────────────────────────────────
 
+function getAgentGroups(
+  player: Player,
+  state: GameState
+): { noPenalty: string[]; penalty: string[] } {
+  const noPenalty: string[] = [];
+  const penalty: string[] = [];
+  const allRoles: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
+
+  for (const role of allRoles) {
+    const agents = ROLE_AGENTS[role] ?? [];
+    if (role === player.primaryRole) {
+      for (const a of agents) if (a !== player.mainAgent) noPenalty.push(a);
+    } else {
+      const rrKey = `${player.id}:${role}`;
+      const rating = state.roleRatings.get(rrKey)?.trueRating ?? 0;
+      if (rating >= 70) {
+        for (const a of agents) noPenalty.push(a);
+      } else if (rating >= 50) {
+        const sorted = [...agents].sort((a, b) => (state.agentMeta[b] ?? 60) - (state.agentMeta[a] ?? 60));
+        const n = Math.floor((rating - 50) / 10) + 1;
+        sorted.slice(0, n).forEach(a => noPenalty.push(a));
+        sorted.slice(n).forEach(a => penalty.push(a));
+      } else {
+        for (const a of agents) penalty.push(a);
+      }
+    }
+  }
+  return { noPenalty, penalty };
+}
+
+function affinityBadge(agent: string, mapName: string, agentMapMeta: Record<string, Record<string, number>>): string {
+  const delta = agentMapMeta[agent]?.[mapName];
+  if (delta === undefined || Math.abs(delta) < 0.005) return '';
+  const pct = Math.round(delta * 100);
+  return pct > 0 ? ` [+${pct}]` : ` [${pct}]`;
+}
+
 function CompPanel({ state, onSetComp }: {
   state: GameState;
   onSetComp: (mapName: string, agents: string[]) => void;
@@ -176,8 +207,6 @@ function CompPanel({ state, onSetComp }: {
   const [activeMap, setActiveMap] = useState(state.activeMapPool[0] ?? '');
   const mapComps = team?.mapComps ?? {};
   const comp: string[] = mapComps[activeMap] ?? roster.map(p => p!.mainAgent);
-
-  const allAgents = Object.values(ROLE_AGENTS).flat();
 
   function setAgent(slotIdx: number, agent: string) {
     const next = [...comp];
@@ -228,8 +257,9 @@ function CompPanel({ state, onSetComp }: {
           roster.map((player, i) => {
             if (!player) return null;
             const selectedAgent = comp[i] ?? player.mainAgent;
-            const playerAgents = [player.mainAgent, ...(player.agentPool ?? [])];
-            const isOffAgent = selectedAgent !== player.mainAgent;
+            const { noPenalty, penalty } = getAgentGroups(player, state);
+            const noPenaltySet = new Set([player.mainAgent, ...noPenalty]);
+            const isPenalized = !noPenaltySet.has(selectedAgent);
 
             return (
               <div key={player.id} style={{
@@ -249,7 +279,7 @@ function CompPanel({ state, onSetComp }: {
                   style={{
                     flex: 1,
                     background: '#17171d',
-                    border: `1px solid ${isOffAgent ? 'var(--amber)' : 'var(--border)'}`,
+                    border: `1px solid ${isPenalized ? 'var(--amber)' : 'var(--border)'}`,
                     color: '#e8e8f0',
                     fontFamily: 'var(--font-mono)',
                     fontSize: 12,
@@ -257,22 +287,32 @@ function CompPanel({ state, onSetComp }: {
                     colorScheme: 'dark',
                   }}
                 >
-                  <optgroup label="Main" style={{ background: '#17171d', color: '#e8e8f0' }}>
-                    <option value={player.mainAgent} style={{ background: '#17171d', color: '#e8e8f0' }}>{player.mainAgent}</option>
+                  <optgroup label="★ MAIN (+3%)" style={{ background: '#17171d', color: '#e8e8f0' }}>
+                    <option value={player.mainAgent} style={{ background: '#17171d', color: '#e8e8f0' }}>
+                      {player.mainAgent}{affinityBadge(player.mainAgent, activeMap, state.agentMapMeta)}
+                    </option>
                   </optgroup>
-                  <optgroup label="Agent Pool" style={{ background: '#17171d', color: '#e8e8f0' }}>
-                    {playerAgents.slice(1).map(a => (
-                      <option key={a} value={a} style={{ background: '#17171d', color: '#9090a8' }}>{a} (off)</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Off-Role (warning)" style={{ background: '#17171d', color: '#e8e8f0' }}>
-                    {allAgents.filter(a => !playerAgents.includes(a) && AGENT_ROLE[a] !== player.primaryRole).map(a => (
-                      <option key={a} value={a} style={{ background: '#17171d', color: '#f5a623' }}>{a} ⚠</option>
-                    ))}
-                  </optgroup>
+                  {noPenalty.length > 0 && (
+                    <optgroup label="── NO PENALTY ──" style={{ background: '#17171d', color: '#e8e8f0' }}>
+                      {noPenalty.map(a => (
+                        <option key={a} value={a} style={{ background: '#17171d', color: '#9090a8' }}>
+                          {a}{affinityBadge(a, activeMap, state.agentMapMeta)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {penalty.length > 0 && (
+                    <optgroup label="── PENALTY (−5%) ──" style={{ background: '#17171d', color: '#e8e8f0' }}>
+                      {penalty.map(a => (
+                        <option key={a} value={a} style={{ background: '#17171d', color: '#f5a623' }}>
+                          {a}{affinityBadge(a, activeMap, state.agentMapMeta)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
-                {isOffAgent && (
-                  <div style={{ color: 'var(--amber)', fontSize: 11 }} title="Off-agent (-5% rating)">~</div>
+                {isPenalized && (
+                  <div style={{ color: 'var(--amber)', fontSize: 11 }} title="Off-role agent (−5% combat power)">~</div>
                 )}
               </div>
             );

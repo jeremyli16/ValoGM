@@ -8,7 +8,9 @@ import {
   MORALE_BASELINE, MORALE_DECAY_RATE, MORALE_WIN_DELTA, MORALE_LOSS_DELTA,
   PLAYER_WIN_DELTA, PLAYER_LOSS_DELTA,
   HOME_NATIONALITIES, IMPORT_LIMITS, MAP_POOL, AGENT_BASELINES, PRACTICE_BUDGET,
+  AGENT_MAP_AFFINITY, AGENT_ROLE,
 } from '../types';
+import type { SeededRng } from './rng';
 import { createRng, randFloat, clamp } from './rng';
 import { developPlayer, applyAgingEffects, updateRoleRatings } from './playerGen';
 import { simMatch } from './matchSim';
@@ -161,6 +163,24 @@ function applyPracticeAllocation(state: GameState): GameState {
   return state;
 }
 
+// ─── Agent Map Meta ───────────────────────────────────────────────────────────
+
+function buildInitialAgentMapMeta(
+  agentMeta: Record<string, number>,
+  mapPool: string[],
+  rng: SeededRng
+): Record<string, Record<string, number>> {
+  const meta: Record<string, Record<string, number>> = {};
+  for (const agent of Object.keys(agentMeta)) {
+    meta[agent] = {};
+    for (const mapName of mapPool) {
+      const base = AGENT_MAP_AFFINITY[agent]?.[mapName] ?? 0;
+      meta[agent][mapName] = clamp(base + randFloat(rng, -0.02, 0.02), -0.15, 0.15);
+    }
+  }
+  return meta;
+}
+
 // ─── Agent Patch ──────────────────────────────────────────────────────────────
 
 function applyAgentPatch(state: GameState): GameState {
@@ -188,12 +208,14 @@ function applyAgentPatch(state: GameState): GameState {
     else if (actualDelta >= 5) buffs.push(`  ${agent}  +${Math.round(actualDelta)}  (${Math.round(pickRate * 100)}% pick rate)`);
   }
 
-  // Map-specific drift for all active maps
+  // Map-specific drift — mean-revert toward AGENT_MAP_AFFINITY base
   for (const agent of Object.keys(state.agentMeta)) {
     if (!state.agentMapMeta[agent]) state.agentMapMeta[agent] = {};
     for (const mapName of state.activeMapPool) {
-      const current = state.agentMapMeta[agent][mapName] ?? 0;
-      state.agentMapMeta[agent][mapName] = clamp(current + randFloat(rng, -0.03, 0.03), -0.15, 0.15);
+      const base = AGENT_MAP_AFFINITY[agent]?.[mapName] ?? 0;
+      const current = state.agentMapMeta[agent][mapName] ?? base;
+      const reversion = (base - current) * 0.2;
+      state.agentMapMeta[agent][mapName] = clamp(current + reversion + randFloat(rng, -0.02, 0.02), -0.15, 0.15);
     }
   }
 
@@ -605,6 +627,23 @@ function checkPhaseTransition(state: GameState): GameState {
     state.phase = 'regular_season';
     state.playoffBracket = null;
 
+    // Collect roles each player actually played this split from mapComps
+    const rolesPlayedByPlayer = new Map<string, Set<PlayerRole>>();
+    state.teams.forEach(team => {
+      if (!team.mapComps) return;
+      for (const [mapName, agents] of Object.entries(team.mapComps)) {
+        if (!state.activeMapPool.includes(mapName)) continue;
+        agents.forEach((agent, i) => {
+          const playerId = team.rosterIds[i];
+          if (!playerId || !agent) return;
+          const role = AGENT_ROLE[agent];
+          if (!role) return;
+          if (!rolesPlayedByPlayer.has(playerId)) rolesPlayedByPlayer.set(playerId, new Set());
+          rolesPlayedByPlayer.get(playerId)!.add(role);
+        });
+      }
+    });
+
     // Age & develop players
     state.players.forEach((player, id) => {
       const aged = applyAgingEffects(player);
@@ -612,9 +651,13 @@ function checkPhaseTransition(state: GameState): GameState {
       state.dirtyPlayers.add(id);
 
       // Update role ratings
+      const playedRoles = rolesPlayedByPlayer.get(id);
       state.roleRatings.forEach((rr, rrId) => {
         if (rr.playerId === id) {
-          const updated = updateRoleRatings(aged, rr, state.season);
+          const withSeason = playedRoles?.has(rr.role)
+            ? { ...rr, lastPlayedSeason: state.season }
+            : rr;
+          const updated = updateRoleRatings(aged, withSeason, state.season);
           state.roleRatings.set(rrId, updated);
         }
       });
@@ -1483,6 +1526,8 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
   // Player picks a team from their region's partnership league
   const playerLeague = leagues.get(playerLeagueId)!;
   const playerTeamId = playerLeague.teamIds[teamIndex % 12];
+  const activeMapPool = pickInitialMapPool(createRng(seed + 88888));
+  const agentMeta = { ...AGENT_BASELINES };
 
   return {
     phase: 'preseason',
@@ -1510,9 +1555,9 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     tournamentHistory: [],
     splitHistory: [],
     seasonHistory: [],
-    activeMapPool: pickInitialMapPool(createRng(seed + 88888)),
-    agentMeta: { ...AGENT_BASELINES },
-    agentMapMeta: {},
+    activeMapPool,
+    agentMeta,
+    agentMapMeta: buildInitialAgentMapMeta(agentMeta, activeMapPool, createRng(seed + 99999)),
     agentPickCounts: {},
     pendingDecisions: [],
     notifications: [],

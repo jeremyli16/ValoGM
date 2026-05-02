@@ -495,6 +495,45 @@ export const MAP_ATTACK_BIAS: Record<string, number> = {
   Corrode:  -0.03,
 };
 
+// ─── Agent Role Lookup ────────────────────────────────────────────────────────
+
+export const AGENT_ROLE: Record<string, PlayerRole> = (() => {
+  const out: Record<string, PlayerRole> = {};
+  for (const [role, agents] of Object.entries(ROLE_AGENTS)) {
+    for (const a of agents) out[a] = role as PlayerRole;
+  }
+  return out;
+})();
+
+// Base agent-map affinity deltas (additive to combat power).
+// Derived from VLR.gg pro playrate data; non-listed map/agent pairs default to 0.
+export const AGENT_MAP_AFFINITY: Record<string, Record<string, number>> = {
+  Jett:       { Breeze: 0.05, Icebox: 0.04, Ascent: 0.04, Bind: -0.03, Split: -0.03 },
+  Reyna:      { Haven: 0.03, Lotus: 0.03 },
+  Raze:       { Bind: 0.06, Split: 0.04, Lotus: 0.03, Fracture: 0.03, Icebox: -0.04 },
+  Neon:       { Split: 0.05, Fracture: 0.04, Haven: 0.03, Breeze: -0.03 },
+  Iso:        { Haven: 0.03, Lotus: 0.03 },
+  Yoru:       { Split: 0.03, Haven: 0.03 },
+  Sova:       { Ascent: 0.05, Icebox: 0.05, Breeze: 0.04, Pearl: 0.03, Bind: -0.06, Fracture: -0.05, Split: -0.04 },
+  Fade:       { Bind: 0.05, Fracture: 0.05, Lotus: 0.04, Split: 0.03 },
+  Breach:     { Split: 0.05, Bind: 0.04, Fracture: 0.04, Haven: 0.03 },
+  'KAY/O':    { Ascent: 0.04, Haven: 0.04, Icebox: 0.03, Fracture: 0.03 },
+  Gekko:      { Bind: 0.04, Lotus: 0.04, Pearl: 0.03 },
+  Skye:       { Haven: 0.05, Lotus: 0.04, Ascent: 0.03, Split: 0.03 },
+  Omen:       { Haven: 0.04, Split: 0.03, Bind: 0.03 },
+  Astra:      { Bind: 0.06, Split: 0.04, Fracture: 0.04, Pearl: 0.04, Breeze: -0.04 },
+  Viper:      { Icebox: 0.08, Breeze: 0.07, Bind: 0.05, Abyss: 0.04, Ascent: -0.06, Haven: -0.04 },
+  Brimstone:  { Fracture: 0.04, Ascent: 0.03, Breeze: -0.04 },
+  Clove:      { Ascent: 0.03, Haven: 0.03 },
+  Harbor:     { Bind: 0.05, Pearl: 0.05, Lotus: 0.04, Icebox: 0.03 },
+  Killjoy:    { Bind: 0.06, Ascent: 0.05, Pearl: 0.04, Split: 0.03, Fracture: -0.04, Lotus: -0.03 },
+  Cypher:     { Ascent: 0.05, Pearl: 0.04, Fracture: 0.03, Bind: -0.03 },
+  Sage:       { Icebox: 0.04, Haven: 0.03, Ascent: 0.03 },
+  Chamber:    { Breeze: 0.04, Pearl: 0.04, Icebox: 0.03, Bind: -0.03 },
+  Deadlock:   { Ascent: 0.03, Haven: 0.03 },
+  Vyse:       { Split: 0.04, Lotus: 0.04, Fracture: 0.03 },
+};
+
 // ─── Agent Meta Constants ─────────────────────────────────────────────────────
 
 export const AGENT_BASELINES: Record<string, number> = {

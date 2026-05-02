@@ -5,7 +5,7 @@ import type {
 import {
   SIDE_MODS, EQUIP_MOD, KILL_BONUS, WIN_INCOME, SPIKE_PLANT_BONUS,
   CREDIT_CAP, FULL_BUY_THRESHOLD, HALF_BUY_THRESHOLD,
-  getLossBonus, SURVIVAL_BONUS, MAP_ATTACK_BIAS,
+  getLossBonus, SURVIVAL_BONUS, MAP_ATTACK_BIAS, ROLE_AGENTS, AGENT_ROLE,
 } from '../types';
 import type { SeededRng } from './rng';
 import { randInt, clamp, weightedChoice } from './rng';
@@ -21,8 +21,10 @@ interface PlayerState {
   morale: number;
   assignedRole: PlayerRole;
   roleRating: number;
+  allRoleRatings: Partial<Record<PlayerRole, number>>;
   agentMetaMod: number;
   agentMapDelta: number;
+  agentFitMod: number;
   credits: number;
   kills: number;
   deaths: number;
@@ -50,7 +52,7 @@ function playerCombatPower(p: PlayerState, buy: BuyType, side: 'attack' | 'defen
   const equipMod = EQUIP_MOD[buy];
   const sideMod = SIDE_MODS[p.assignedRole][side];
   const moraleMod = 0.90 + (p.morale / 100) * 0.15;
-  return base * roleMultiplier * equipMod * sideMod * moraleMod * p.agentMetaMod + p.agentMapDelta;
+  return base * roleMultiplier * equipMod * sideMod * moraleMod * p.agentMetaMod * p.agentFitMod + p.agentMapDelta;
 }
 
 function teamCombatPower(
@@ -411,6 +413,11 @@ function buildPlayerState(
 ): PlayerState {
   const rrKey = `${player.id}:${player.primaryRole}`;
   const rr = roleRatings.get(rrKey);
+  const allRoleRatings: Partial<Record<PlayerRole, number>> = {};
+  for (const role of Object.keys(ROLE_AGENTS) as PlayerRole[]) {
+    const rec = roleRatings.get(`${player.id}:${role}`);
+    if (rec) allRoleRatings[role] = rec.trueRating;
+  }
   return {
     id: player.id,
     mainAgent: player.mainAgent,
@@ -420,8 +427,10 @@ function buildPlayerState(
     morale: player.morale,
     assignedRole: player.primaryRole,
     roleRating: rr?.trueRating ?? 60,
+    allRoleRatings,
     agentMetaMod: 1.0,
     agentMapDelta: 0,
+    agentFitMod: 1.0,
     credits: 800,
     kills: 0,
     deaths: 0,
@@ -429,6 +438,28 @@ function buildPlayerState(
     roundDamage: 0,
     acs: 0,
   };
+}
+
+function computeAgentFitMod(
+  assignedAgent: string,
+  mainAgent: string,
+  primaryRole: PlayerRole,
+  allRoleRatings: Partial<Record<PlayerRole, number>>,
+  agentMeta: Record<string, number>
+): number {
+  if (assignedAgent === mainAgent) return 1.03;
+  const assignedRole = AGENT_ROLE[assignedAgent];
+  if (assignedRole === primaryRole) return 1.00;
+  const roleRating = allRoleRatings[assignedRole] ?? 0;
+  if (roleRating >= 70) return 1.00;
+  if (roleRating >= 50) {
+    const roleAgents = ROLE_AGENTS[assignedRole] ?? [];
+    const sorted = [...roleAgents].sort((a, b) => (agentMeta[b] ?? 60) - (agentMeta[a] ?? 60));
+    // 50-59 → top 1 free, 60-69 → top 2 free
+    const n = Math.floor((roleRating - 50) / 10) + 1;
+    if (sorted.slice(0, n).includes(assignedAgent)) return 1.00;
+  }
+  return 0.95;
 }
 
 // statesA/statesB are mutated — stats for this map are accumulated into them.
@@ -449,29 +480,35 @@ function simMap(
   const mapBonusB = 1.0 + (practiceB - 50) * 0.001;
 
   // Local copies with map bonus, agent meta modifiers, and zeroed stats.
-  const localA: PlayerState[] = statesA.map(s => {
-    const globalMeta = agentMeta[s.mainAgent] ?? 60;
+  const localA: PlayerState[] = statesA.map((s, i) => {
+    const assignedAgent = teamA.mapComps?.[mapName]?.[i] ?? s.mainAgent;
+    const globalMeta = agentMeta[assignedAgent] ?? 60;
     const agentMetaMod = 0.90 + (globalMeta / 100) * 0.20;
-    const agentMapDelta = agentMapMeta[s.mainAgent]?.[mapName] ?? 0;
+    const agentMapDelta = agentMapMeta[assignedAgent]?.[mapName] ?? 0;
+    const agentFitMod = computeAgentFitMod(assignedAgent, s.mainAgent, s.assignedRole, s.allRoleRatings, agentMeta);
     return {
       ...s,
       trueAim: clamp(s.trueAim * mapBonusA, 1, 100),
       trueGameSense: clamp(s.trueGameSense * mapBonusA, 1, 100),
       agentMetaMod,
       agentMapDelta,
+      agentFitMod,
       kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
     };
   });
-  const localB: PlayerState[] = statesB.map(s => {
-    const globalMeta = agentMeta[s.mainAgent] ?? 60;
+  const localB: PlayerState[] = statesB.map((s, i) => {
+    const assignedAgent = teamB.mapComps?.[mapName]?.[i] ?? s.mainAgent;
+    const globalMeta = agentMeta[assignedAgent] ?? 60;
     const agentMetaMod = 0.90 + (globalMeta / 100) * 0.20;
-    const agentMapDelta = agentMapMeta[s.mainAgent]?.[mapName] ?? 0;
+    const agentMapDelta = agentMapMeta[assignedAgent]?.[mapName] ?? 0;
+    const agentFitMod = computeAgentFitMod(assignedAgent, s.mainAgent, s.assignedRole, s.allRoleRatings, agentMeta);
     return {
       ...s,
       trueAim: clamp(s.trueAim * mapBonusB, 1, 100),
       trueGameSense: clamp(s.trueGameSense * mapBonusB, 1, 100),
       agentMetaMod,
       agentMapDelta,
+      agentFitMod,
       kills: 0, deaths: 0, assists: 0, roundDamage: 0, acs: 0,
     };
   });
