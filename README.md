@@ -47,7 +47,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - "This week" badge on the upcoming match
 
 **Standings**
-- Group A and Group B shown side by side
+- Region tab bar (Americas / EMEA / Pacific / China) — view any region's standings; player's region marked with "YOU"
+- Group A and Group B shown side by side per region
 - Columns: seed, team, W, L, Pts, Map Diff, Round Diff
 - Player's team highlighted
 
@@ -68,7 +69,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **Stats**
 - League-wide player stat leaderboard aggregated from IndexedDB
-- **Filter system:** season (calendar year), split (1/2/3/All), phase (All / Regular Season / Playoffs), role, team
+- **Filter system:** season (calendar year), split (1/2/3/All), phase (All / Regular Season / Playoffs / International), role, team scope (All / My League / My Team), region (All / AMR / EMEA / PAC / CHN)
+- **International phase:** reads stats directly from `tournament.playerStats` (accumulated per-match during tournament simulation); region column added; "My League" scope hidden in this mode
 - **Columns:** Player, Team, Maps, Rounds, K, D, A, K/D, ACS, ADR, Rating — all sortable
 - Stats aggregated correctly: totals summed across maps, per-map averages (ACS/ADR/Rating) weighted by maps played
 - Defaults to current calendar season, all splits, all phases
@@ -81,11 +83,32 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **History**
 - One split = one complete game-season (regular season + playoffs); three splits form one calendar season
-- Per-split results: split winner, runner-up (Grand Final loser), and split MVP (highest average rating across regular season and playoff matches)
-- Per-season awards (shown at end of every 3rd split): Season MVP, Best Duelist, Best Initiator, Best Controller, Best Sentinel
-- Seasons listed newest-first; splits within each season listed newest-first
-- Player's team champion banner highlighted in amber; season champion badge on each season block
+- **Flat table layout per season:** each event is its own row — Champions, Masters, and per-region split results shown inline with columns EVENT | WINNER | RUNNER-UP | MVP
+- **International tournament rows:** Champions and Masters rows appear above their corresponding split; gold left-border accent for Champions, teal for Masters; Standings button expands placement table (1st / 2nd / Main Event / Play-in); View Bracket button opens the full bracket screen; Tournament MVP displayed (stage-weighted: play-in ×0.6, main event ×1.0)
+- **Per-split regional rows:** each split section shows four region rows (AMR / EMEA / PAC / CHN) always visible; player's region uses exact SplitRecord data; other regions derive winner/runner-up from standings and best starter on the winning team as proxy MVP; each row has its own Standings toggle
+- Per-season awards (collapsible via Awards button): Season MVP, Best Duelist, Best Initiator, Best Controller, Best Sentinel
+- Seasons listed newest-first; splits within each season listed newest-first (Split 3 → Split 2 → Split 1); tournament rows precede their split
+- Player's team highlighted in teal (split wins) or amber (championship)
 - Top bar and sidebar display calendar season and split number (e.g. "Season 1 — Split 2 — Week 4") rather than raw internal game-season counters
+
+**International Tournament Screen**
+- Full bracket viewer for Masters and Champions tournaments
+- Swiss-stage play-in: bracket grid with round columns, match cards showing teams, scores, and win/loss status; 3-0 qualifiers and 0-3 eliminations highlighted
+- Double-elimination main event / Champions playoff: upper and lower bracket grids with seeding, scores, and champion banner
+- Group stage (Champions only): per-group round-robin + double-elim results; group headers with standings
+- Navigable from History screen ("View Bracket" button) or the dedicated tournament tab when a tournament is active
+
+---
+
+### International Tournaments
+- All 4 regions fully simulated (regular season + playoffs) before each international event
+- **Qualification:** Masters — top 3 per region; Champions — top 4 per region by Champions Points (awarded for regular-season wins, playoff placements, and Masters results)
+- **Masters format:** 8-team Swiss play-in (cross-region backtrack pairing R1, strength-paired R2/R3; top 4 advance) → 8-team double-elimination main event (S1 bracket choice)
+- **Champions format:** 4×4 Latin-square group draw → per-group double-elim → 8-team double-elim cross-group playoff
+- **`inter_tournament` game phase:** state machine enters this phase between splits; player advances week-by-week through the tournament; non-player-region matches auto-simulated in the background
+- **Free agency window:** opens during the offseason between Champions and the next season; contracted players with expiring deals become available
+- **Per-match stat accumulation:** every tournament match writes player stats to `tournament.playerStats` (kills, deaths, assists, ACS, ADR, rating) with stage weights (play-in ×0.6, main event ×1.0) used only for MVP selection — displayed rating uses the unweighted formula matching regular-season stats
+- **Tournament MVP:** best player on the champion team by weighted rating across all matches they played
 
 ---
 
@@ -168,19 +191,6 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 ---
 
 ## Not Yet Implemented
-
-### International Tournaments (in progress)
-International Masters and Champions tournaments connecting all 4 regions are partially implemented. See `INTERNATIONAL_PLAN.md` for the full spec and progress. Steps 1–7 are complete:
-- All 4 regions fully simulated (regular season + playoffs)
-- Qualification logic: Masters (top 3 per region), Champions (top 4 per region by Champions Points + standings)
-- Champions Points tracking: awarded for regular-season wins, playoff placements, and Masters tournament placements
-- Full tournament simulation engine in `src/engine/internationalTournament.ts`:
-  - Masters play-in: 8-team Swiss stage (R1 cross-region backtrack pairing, R2/R3 strength-paired)
-  - Masters main event: 8-team double-elim with S1 bracket choice (AI picks lowest-rated SQ)
-  - Champions group stage: Latin-square 4×4 group draw, per-group double-elim
-  - Champions playoff: 8-team double-elim with cross-group bracket constraint
-
-Remaining: `inter_tournament` game phase wiring (step 8), free agency unlock (step 9), tournament display screen (step 10), history/stats/standings updates (steps 11–13).
 
 ### Scouting
 `PlayerRoleRatingRecord` stores a `scoutedRating` and `scoutConfidence` per role per player. Confidence passively improves each week via the coach's Scouting rating, but there is no active player-initiated scouting action — you cannot target a specific opponent player for scouting, and `Organization.scoutQuality` is stored but unused. Initial `scoutedRating` values are set at generation and never refined to reflect player development.
