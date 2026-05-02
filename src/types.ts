@@ -284,6 +284,19 @@ export interface TournamentSeed {
   globalSeed: number;
 }
 
+export interface TournamentPlayerStat {
+  playerId: string;
+  kills: number;
+  deaths: number;
+  assists: number;
+  totalAdr: number;       // sum of (adr * maps) across matches
+  totalAcs: number;       // sum of (acs * maps) across matches
+  rounds: number;
+  maps: number;
+  weightedRating: number; // sum of (rating * stageWeight * maps)
+  weightedMaps: number;   // sum of (stageWeight * maps) — denominator for avg
+}
+
 export interface InternationalTournament {
   id: string;
   name: 'Masters 1' | 'Masters 2' | 'Champions';
@@ -297,6 +310,7 @@ export interface InternationalTournament {
   champion: string | null;
   runnerUp: string | null;
   mvpPlayerId: string | null;
+  playerStats: Record<string, TournamentPlayerStat>;
 }
 
 // ─── League History ───────────────────────────────────────────────────────────
