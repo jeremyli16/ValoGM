@@ -115,29 +115,20 @@ function SplitStandings({ gameSeason, state }: { gameSeason: number; state: Game
 
 // ─── Split row ────────────────────────────────────────────────────────────────
 
-function SplitRow({
-  split, state, tournament, onViewTournament,
-}: {
-  split: SplitRecord;
-  state: GameState;
-  tournament?: InternationalTournament;
-  onViewTournament?: (t: InternationalTournament) => void;
-}) {
+function SplitRow({ split, state }: { split: SplitRecord; state: GameState }) {
   const [showStandings, setShowStandings] = useState(false);
-  const winner    = teamName(state, split.winnerTeamId);
-  const runnerUp  = teamName(state, split.runnerUpTeamId);
-  const mvpAlias  = playerAlias(state, split.mvpPlayerId);
-  const mvpTeam   = playerTeam(state, split.mvpPlayerId);
-  const mvpRole   = playerRole(state, split.mvpPlayerId);
+  const winner     = teamName(state, split.winnerTeamId);
+  const runnerUp   = teamName(state, split.runnerUpTeamId);
+  const mvpAlias   = playerAlias(state, split.mvpPlayerId);
+  const mvpTeam    = playerTeam(state, split.mvpPlayerId);
+  const mvpRole    = playerRole(state, split.mvpPlayerId);
   const gameSeason = (split.calendarSeason - 1) * 3 + split.splitNum;
-  const tChampion  = tournament?.champion ? teamName(state, tournament.champion) : null;
-  const tName      = tournament?.name;
 
   return (
     <div style={{ borderBottom: '1px solid var(--border-dim)' }}>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '70px 1fr 1fr 1fr 1fr auto',
+        gridTemplateColumns: '70px 1fr 1fr 1fr auto',
         gap: 12,
         alignItems: 'center',
         padding: '10px 0',
@@ -163,24 +154,145 @@ function SplitRow({
           </div>
           {mvpTeam && <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{mvpTeam}</div>}
         </div>
+        <button
+          className="btn"
+          style={{ fontSize: 10, padding: '2px 8px', color: 'var(--text-dim)' }}
+          onClick={() => setShowStandings(s => !s)}
+        >
+          {showStandings ? 'Hide' : 'Standings'}
+        </button>
+      </div>
+      {showStandings && (
+        <div style={{ paddingBottom: 12 }}>
+          <SplitStandings gameSeason={gameSeason} state={state} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tournament standings ─────────────────────────────────────────────────────
+
+const T_REGION_COLOR: Record<string, string> = {
+  americas: 'var(--red)', emea: 'var(--blue)', pacific: 'var(--teal)', china: 'var(--amber)',
+};
+const T_REGION_ABBR: Record<string, string> = {
+  americas: 'AMR', emea: 'EMEA', pacific: 'PAC', china: 'CHN',
+};
+
+function placementLabel(t: InternationalTournament, teamId: string): string {
+  if (teamId === t.champion) return '1st';
+  if (teamId === t.runnerUp) return '2nd';
+  if (t.mainBracket?.matches.some(m => m.teamAId === teamId || m.teamBId === teamId)) return 'Main Event';
+  return 'Play-in';
+}
+
+const PLACEMENT_ORDER: Record<string, number> = { '1st': 0, '2nd': 1, 'Main Event': 2, 'Play-in': 3 };
+
+function TournamentStandings({ tournament: t, state }: { tournament: InternationalTournament; state: GameState }) {
+  const rows = t.qualifiedTeams.map(seed => ({
+    ...seed,
+    name: state.teams.get(seed.teamId)?.name ?? seed.teamId,
+    placement: placementLabel(t, seed.teamId),
+    isPlayer: seed.teamId === state.playerTeamId,
+  })).sort((a, b) => (PLACEMENT_ORDER[a.placement] ?? 9) - (PLACEMENT_ORDER[b.placement] ?? 9));
+
+  return (
+    <div style={{ paddingBottom: 12 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8, fontSize: 11 }}>
+        <thead>
+          <tr style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em' }}>
+            <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>#</th>
+            <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>TEAM</th>
+            <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>REGION</th>
+            <th style={{ textAlign: 'left', paddingBottom: 4, fontWeight: 400 }}>RESULT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.teamId} style={{ color: row.isPlayer ? 'var(--teal)' : 'var(--text-secondary)' }}>
+              <td style={{ fontFamily: 'var(--font-mono)', paddingRight: 6, color: 'var(--text-dim)' }}>{i + 1}</td>
+              <td style={{ fontWeight: row.isPlayer ? 700 : 400, paddingRight: 12 }}>{row.name}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: T_REGION_COLOR[row.region] ?? 'var(--text-dim)', paddingRight: 12 }}>
+                {T_REGION_ABBR[row.region] ?? row.region}
+              </td>
+              <td style={{
+                fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.04em',
+                color: row.placement === '1st' ? 'var(--amber)' : row.placement === '2nd' ? 'var(--text-primary)' : 'var(--text-dim)',
+              }}>
+                {row.placement.toUpperCase()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Tournament row ───────────────────────────────────────────────────────────
+
+function TournamentRow({
+  tournament: t, state, onViewTournament,
+}: {
+  tournament: InternationalTournament;
+  state: GameState;
+  onViewTournament?: (t: InternationalTournament) => void;
+}) {
+  const [showStandings, setShowStandings] = useState(false);
+  const isChampions     = t.name === 'Champions';
+  const accent          = isChampions ? 'var(--amber)' : 'var(--teal)';
+  const champion        = t.champion ? teamName(state, t.champion) : '—';
+  const runnerUp        = t.runnerUp ? teamName(state, t.runnerUp) : '—';
+  const mvpAlias        = t.mvpPlayerId ? playerAlias(state, t.mvpPlayerId) : '—';
+  const mvpTeam         = t.mvpPlayerId ? playerTeam(state, t.mvpPlayerId) : '';
+  const mvpRole         = t.mvpPlayerId ? playerRole(state, t.mvpPlayerId) : null;
+  const isPlayerChamp   = t.champion === state.playerTeamId;
+  const inProgress      = t.phase !== 'complete';
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--border-dim)', background: 'color-mix(in srgb, var(--bg-2) 40%, transparent)' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '90px 1fr 1fr 1fr auto',
+        gap: 12,
+        alignItems: 'center',
+        padding: '10px 0',
+      }}>
         <div>
-          {tName && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                <span style={{
-                  fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em',
-                  color: tName === 'Champions' ? 'var(--amber)' : 'var(--teal)',
-                  border: `1px solid ${tName === 'Champions' ? 'var(--amber)' : 'var(--teal)'}`,
-                  padding: '1px 5px',
-                }}>
-                  {tName.toUpperCase()}
-                </span>
-              </div>
-              {tChampion && (
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{tChampion}</div>
-              )}
-            </>
-          )}
+          <span style={{
+            fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em',
+            color: accent, border: `1px solid ${accent}`, padding: '2px 6px',
+          }}>
+            {t.name.toUpperCase()}
+          </span>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>CHAMPION</div>
+          <div style={{
+            fontSize: 13, fontWeight: 700,
+            color: isPlayerChamp ? 'var(--amber)' : inProgress ? 'var(--text-dim)' : 'var(--text-primary)',
+            fontStyle: inProgress ? 'italic' : undefined,
+          }}>
+            {inProgress ? 'In progress' : (isPlayerChamp ? '★ ' : '') + champion}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>RUNNER-UP</div>
+          <div style={{ fontSize: 13, color: inProgress ? 'var(--text-dim)' : 'var(--text-secondary)', fontStyle: inProgress ? 'italic' : undefined }}>
+            {inProgress ? '—' : runnerUp}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 3 }}>TOURNAMENT MVP</div>
+          <div style={{
+            fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 700,
+            color: mvpRole ? ROLE_COLORS[mvpRole] : inProgress ? 'var(--text-dim)' : 'var(--text-primary)',
+            fontStyle: inProgress ? 'italic' : undefined,
+          }}>
+            {inProgress ? '—' : mvpAlias}
+          </div>
+          {!inProgress && mvpTeam && <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{mvpTeam}</div>}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
           <button
@@ -190,22 +302,18 @@ function SplitRow({
           >
             {showStandings ? 'Hide' : 'Standings'}
           </button>
-          {tournament && onViewTournament && (
+          {onViewTournament && (
             <button
               className="btn btn-teal"
               style={{ fontSize: 10, padding: '2px 8px' }}
-              onClick={() => onViewTournament(tournament)}
+              onClick={() => onViewTournament(t)}
             >
               View Bracket
             </button>
           )}
         </div>
       </div>
-      {showStandings && (
-        <div style={{ paddingBottom: 12 }}>
-          <SplitStandings gameSeason={gameSeason} state={state} />
-        </div>
-      )}
+      {showStandings && <TournamentStandings tournament={t} state={state} />}
     </div>
   );
 }
@@ -279,21 +387,21 @@ function SeasonBlock({
         </div>
       )}
 
-      {/* Split rows */}
+      {/* Split + tournament rows */}
       {splits.length > 0 && (
         <div style={{ padding: '12px 18px' }}>
           <div style={{ fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 4 }}>
-            SPLITS
+            SPLITS & TOURNAMENTS
           </div>
-          {splits.map(split => (
-            <SplitRow
-              key={`${split.calendarSeason}-${split.splitNum}`}
-              split={split}
-              state={state}
-              tournament={tournamentsBySplit.get(`${split.calendarSeason}-${split.splitNum}`)}
-              onViewTournament={onViewTournament}
-            />
-          ))}
+          {splits.map(split => {
+            const t = tournamentsBySplit.get(`${split.calendarSeason}-${split.splitNum}`);
+            return (
+              <div key={`${split.calendarSeason}-${split.splitNum}`}>
+                {t && <TournamentRow tournament={t} state={state} onViewTournament={onViewTournament} />}
+                <SplitRow split={split} state={state} />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
