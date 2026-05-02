@@ -13,7 +13,7 @@
 | 7 — Main bracket + S1 choice | ✅ Done |
 | 8 — `inter_tournament` phase machine | ✅ Done |
 | 9 — Free agency unlock + roster lock | ✅ Done |
-| 10 — Tournament display screen | ⬜ |
+| 10 — Tournament display screen | ✅ Done |
 | 11 — History screen tournament entries | ⬜ |
 | 12 — Stats screen region + tournament filter | ⬜ |
 | 13 — Standings screen region tabs | ⬜ |
@@ -490,7 +490,7 @@ set to `true` so the Stats screen can filter them separately.
 | 7 | Main bracket + S1 choice | `gameLoop.ts`, `App.tsx` (new callback) | ✅ |
 | 8 | `inter_tournament` phase machine | `gameLoop.ts` (checkPhaseTransition) | ✅ |
 | 9 | Free agency unlock + roster lock | `App.tsx`, `gameLoop.ts` | ✅ |
-| 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ⬜ |
+| 10 | Tournament display screen | `screens/InternationalTournament.tsx` | ✅ |
 | 11 | History screen tournament entries | `screens/LeagueHistory.tsx` | ⬜ |
 | 12 | Stats screen region + tournament filter | `screens/Stats.tsx` | ⬜ |
 | 13 | Standings screen region tabs | `screens/Standings.tsx` | ⬜ |

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
-type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics' | 'stats';
+type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' | 'schedule' | 'playoffs' | 'history' | 'finances' | 'tactics' | 'stats' | 'tournament';
 
 interface Props {
   state: GameState;
@@ -22,6 +22,7 @@ const NAV_ITEMS: { id: NavItem; label: string }[] = [
   { id: 'standings',  label: 'Standings' },
   { id: 'schedule',   label: 'Schedule' },
   { id: 'playoffs',   label: 'Playoffs' },
+  { id: 'tournament', label: 'Worlds' },
   { id: 'history',    label: 'History' },
 ];
 
@@ -31,15 +32,26 @@ function phaseTag(state: GameState) {
   const p = state.phase;
   if (p === 'regular_season') return `Season ${calSeason} — Split ${splitNum} — Week ${state.week}`;
   if (p === 'playoffs') return `Season ${calSeason} — Split ${splitNum} — Playoffs`;
+  if (p === 'inter_tournament') {
+    const name = state.activeInternationalTournament?.name ?? 'Tournament';
+    return `${name} — Week ${state.week}`;
+  }
   if (p === 'offseason') return `Offseason`;
   if (p === 'preseason') return 'Preseason';
   return '';
+}
+
+function tournamentNavLabel(state: GameState): string {
+  if (state.activeInternationalTournament) return state.activeInternationalTournament.name;
+  const splitNum = ((state.season - 1) % 3) + 1;
+  return splitNum === 1 ? 'Masters 1' : splitNum === 2 ? 'Masters 2' : 'Champions';
 }
 
 export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props) {
   const unread = state.notifications.filter(n => !n.read).length;
   const pendingRenewals = state.pendingDecisions.filter(d => d.type === 'contract_renewal').length;
   const team = state.teams.get(state.playerTeamId);
+  const tournamentLabel = tournamentNavLabel(state);
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
@@ -70,6 +82,7 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
         <nav style={{ flex: 1, padding: '8px 0' }}>
           {NAV_ITEMS.map(item => {
             const isActive = active === item.id;
+            const label = item.id === 'tournament' ? tournamentLabel : item.label;
             return (
               <div
                 key={item.id}
@@ -96,7 +109,7 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
                     background: 'var(--red)',
                   }} />
                 )}
-                {item.label}
+                {label}
                 {item.id === 'dashboard' && unread > 0 && (
                   <span style={{
                     background: 'var(--red)', color: '#fff',
