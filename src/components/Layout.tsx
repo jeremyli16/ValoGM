@@ -158,12 +158,6 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
           ))}
         </nav>
 
-        {/* Footer */}
-        <div style={{ padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
-          <div className="text-dim" style={{ fontSize: 10 }}>
-            {team?.wins ?? 0}W — {team?.losses ?? 0}L · {team?.points ?? 0}pts
-          </div>
-        </div>
       </div>
 
       {/* Main content */}
@@ -173,17 +167,9 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
           height: 44, flexShrink: 0,
           background: 'var(--bg-1)',
           borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
           padding: '0 16px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span className="font-head text-red" style={{ fontSize: 14, letterSpacing: '0.06em' }}>
-              {state.teams.get(state.playerTeamId)?.name ?? ''}
-            </span>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>
-              {phaseTag(state)}
-            </span>
-          </div>
           <button className="btn btn-teal" style={{ fontSize: 12, padding: '5px 16px' }} onClick={onAdvanceWeek}>
             Advance Week ▶
           </button>

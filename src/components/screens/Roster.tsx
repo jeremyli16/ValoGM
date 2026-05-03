@@ -17,6 +17,10 @@ const ROLE_COLORS: Record<string, string> = {
   sentinel:   'var(--role-sentinel)',
 };
 
+function overallRating(p: Player): number {
+  return Math.round(p.aim * 0.40 + p.gameSense * 0.35 + p.clutch * 0.15 + p.communication * 0.10);
+}
+
 interface SeasonAvg {
   games: number;
   kills: number;
@@ -55,8 +59,14 @@ function PlayerDetail({ player, roleRatings, seasonAvg, careerAvg, isStarter, ca
   return (
     <div className="card p-4 flex-col gap-3" style={{ minWidth: 300 }}>
       <div>
-        <div style={{ fontFamily: 'var(--font-head)', fontSize: 20, fontWeight: 700, letterSpacing: '0.06em' }}>
-          {player.alias.toUpperCase()}
+        <div className="flex items-baseline gap-3">
+          <div style={{ fontFamily: 'var(--font-head)', fontSize: 20, fontWeight: 700, letterSpacing: '0.06em' }}>
+            {player.alias.toUpperCase()}
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 22, fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--teal)', lineHeight: 1 }}>{overallRating(player)}</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)' }}>OVR</div>
+          </div>
         </div>
         <div className="text-dim text-sm">{player.firstName} {player.lastName} · {player.nationality}</div>
         <div className="flex gap-2 items-center" style={{ marginTop: 6 }}>
@@ -239,6 +249,7 @@ function PlayerRow({ player, selected, onClick }: { player: Player; selected: bo
         <div style={{ fontWeight: 600, fontSize: 13 }}>{player.alias}</div>
         <div className="text-dim" style={{ fontSize: 11 }}>{player.nationality} · {player.mainAgent}</div>
       </td>
+      <td className="font-mono" style={{ color: 'var(--teal)', fontWeight: 700 }}>{overallRating(player)}</td>
       <td className="font-mono">{player.aim}</td>
       <td className="font-mono">{player.gameSense}</td>
       <td className="font-mono">{player.clutch}</td>
@@ -376,6 +387,7 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
               <tr>
                 <th>Role</th>
                 <th>Player</th>
+                <th>OVR</th>
                 <th>AIM</th>
                 <th>GS</th>
                 <th>CLUTCH</th>

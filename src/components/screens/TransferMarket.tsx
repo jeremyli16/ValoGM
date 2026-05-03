@@ -15,6 +15,10 @@ const ROLE_COLORS: Record<PlayerRole, string> = {
 
 const ROLES: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
 
+function overallRating(p: Player): number {
+  return Math.round(p.aim * 0.40 + p.gameSense * 0.35 + p.clutch * 0.15 + p.communication * 0.10);
+}
+
 interface DisplayRoleRating {
   role: PlayerRole;
   rating: number;
@@ -66,6 +70,7 @@ type Tab = 'players' | 'coaches';
 type FilterRole = PlayerRole | 'all';
 type FilterStatus = 'all' | 'free' | 'contracted' | 'bench';
 type FilterRegion = 'all' | 'own';
+type SortBy = 'rating' | 'salary' | 'age';
 
 function acceptanceLikelihood(
   player: Player,
@@ -78,15 +83,23 @@ function acceptanceLikelihood(
   return Math.round(Math.max(5, Math.min(95, salaryScore + prestigeScore)));
 }
 
-function PlayerCard({ player, roleRatings, onOffer, showOffer, isLocked }: {
+function PlayerCard({ player, roleRatings, onOffer, hasPendingOffer, isLocked, buyout }: {
   player: Player;
   roleRatings: DisplayRoleRating[];
   onOffer: (p: Player) => void;
-  showOffer: boolean;
+  hasPendingOffer?: boolean;
   isLocked?: boolean;
+  buyout?: number;
 }) {
+  const [ratingsExpanded, setRatingsExpanded] = useState(false);
+  const isFree = !player.teamId;
+  const accentColor = isFree ? 'var(--teal)' : 'var(--amber)';
+  const primaryRating = roleRatings.find(r => r.role === player.primaryRole);
+  const displayRatings = ratingsExpanded ? roleRatings : (primaryRating ? [primaryRating] : roleRatings.slice(0, 1));
+  const ovr = overallRating(player);
+
   return (
-    <div className="card" style={{ padding: '10px 12px' }}>
+    <div className="card" style={{ padding: '10px 12px', borderLeft: `3px solid ${accentColor}` }}>
       <div className="flex justify-between items-center">
         <div className="flex gap-2 items-center">
           <RoleBadge role={player.primaryRole} />
@@ -96,15 +109,26 @@ function PlayerCard({ player, roleRatings, onOffer, showOffer, isLocked }: {
           </div>
         </div>
         <div className="flex gap-2 items-center">
+          <div style={{ textAlign: 'center', minWidth: 28 }}>
+            <div style={{ fontSize: 18, fontFamily: 'var(--font-mono)', fontWeight: 700, color: accentColor, lineHeight: 1 }}>{ovr}</div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)' }}>OVR</div>
+          </div>
           <div className="text-right">
             <div className="font-mono text-xs">${player.salary.toLocaleString()}/yr</div>
+            {buyout !== undefined && buyout > 0 && (
+              <div className="font-mono text-xs" style={{ color: 'var(--amber)' }}>Fee: ${buyout.toLocaleString()}</div>
+            )}
             <div className="text-dim text-xs">{player.nationality} · Age {player.age}</div>
           </div>
           {isLocked ? (
             <span style={{ fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)' }}>
               LOCKED
             </span>
-          ) : showOffer && (
+          ) : hasPendingOffer ? (
+            <span style={{ fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--amber)', padding: '3px 6px', border: '1px solid var(--amber)', opacity: 0.85 }}>
+              OFFER SENT
+            </span>
+          ) : (
             <button className="btn btn-teal" style={{ fontSize: 11 }} onClick={() => onOffer(player)}>
               Make Offer
             </button>
@@ -125,11 +149,21 @@ function PlayerCard({ player, roleRatings, onOffer, showOffer, isLocked }: {
 
       {roleRatings.length > 0 && (
         <div style={{ marginTop: 8, borderTop: '1px solid var(--border-dim)', paddingTop: 6 }}>
-          <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 4 }}>
-            ROLE RATINGS
+          <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
+            <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)' }}>
+              ROLE RATINGS
+            </div>
+            {roleRatings.length > 1 && (
+              <button
+                onClick={() => setRatingsExpanded(e => !e)}
+                style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--teal)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                {ratingsExpanded ? 'COLLAPSE' : `+${roleRatings.length - 1} MORE`}
+              </button>
+            )}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 10px' }}>
-            {roleRatings.map(({ role, rating, confidence }) => {
+          <div style={{ display: 'grid', gridTemplateColumns: ratingsExpanded ? '1fr 1fr' : '1fr', gap: '4px 10px' }}>
+            {displayRatings.map(({ role, rating, confidence }) => {
               const isPrimary = role === player.primaryRole;
               const color = ROLE_COLORS[role];
               return (
@@ -153,12 +187,6 @@ function PlayerCard({ player, roleRatings, onOffer, showOffer, isLocked }: {
               );
             })}
           </div>
-        </div>
-      )}
-
-      {player.teamId && (
-        <div className="text-dim text-xs" style={{ marginTop: 4 }}>
-          Under contract — transfer fee required
         </div>
       )}
     </div>
@@ -364,6 +392,7 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
   const [filterRole, setFilterRole] = useState<FilterRole>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterRegion, setFilterRegion] = useState<FilterRegion>('own');
+  const [sortBy, setSortBy] = useState<SortBy>('rating');
   const [search, setSearch] = useState('');
   const [offerTarget, setOfferTarget] = useState<Player | null>(null);
 
@@ -411,6 +440,14 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
     });
   }, [allPlayers, filterRole, filterStatus, filterRegion, search, state.regionId]);
 
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'salary') return a.salary - b.salary;
+      if (sortBy === 'age') return a.age - b.age;
+      return (b.aim + b.gameSense) - (a.aim + a.gameSense);
+    });
+  }, [filtered, sortBy]);
+
   const freeAgentCoaches = useMemo(() => {
     return state.freeAgentCoaches
       .map(id => state.coaches.get(id))
@@ -427,6 +464,15 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
   const playerTeam = state.teams.get(state.playerTeamId);
   const headCoach = playerTeam?.headCoachId ? state.coaches.get(playerTeam.headCoachId) : null;
   const asstCoach = playerTeam?.assistantCoachId ? state.coaches.get(playerTeam.assistantCoachId) : null;
+
+  const rosterStarters = useMemo(() =>
+    (playerTeam?.rosterIds ?? []).map(id => state.players.get(id)).filter((p): p is Player => !!p),
+    [playerTeam, state.players],
+  );
+  const rosterBench = useMemo(() =>
+    (playerTeam?.subIds ?? []).map(id => state.players.get(id)).filter((p): p is Player => !!p),
+    [playerTeam, state.players],
+  );
 
   const teamNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -471,22 +517,29 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
 
       {tab === 'players' && (
         <>
-          <div className="flex gap-2">
+          {/* Controls row */}
+          <div className="flex gap-2 flex-wrap">
             <input
               type="text"
               placeholder="Search player..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', padding: '5px 10px', width: 180 }}
+              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', padding: '5px 10px', width: 160 }}
             />
-          </div>
-
-          <div className="flex gap-2 flex-wrap">
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as SortBy)}
+              style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'var(--font-body)', padding: '5px 8px', fontSize: 12 }}
+            >
+              <option value="rating">Sort: Rating</option>
+              <option value="salary">Sort: Salary</option>
+              <option value="age">Sort: Age</option>
+            </select>
             <div className="flex gap-1">
               {(['all', 'duelist', 'initiator', 'controller', 'sentinel'] as const).map(r => (
                 <button key={r} className={`btn ${filterRole === r ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
                   onClick={() => setFilterRole(r)}>
-                  {r === 'all' ? 'All Roles' : r.slice(0, 4).toUpperCase()}
+                  {r === 'all' ? 'All' : r.slice(0, 4).toUpperCase()}
                 </button>
               ))}
             </div>
@@ -494,77 +547,137 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
               {(['all', 'free', 'contracted', 'bench'] as const).map(s => (
                 <button key={s} className={`btn ${filterStatus === s ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
                   onClick={() => setFilterStatus(s)}>
-                  {s === 'all' ? 'All' : s === 'free' ? 'Free Agents' : s === 'contracted' ? 'Contracted' : 'Bench'}
+                  {s === 'all' ? 'All' : s === 'free' ? 'Free' : s === 'contracted' ? 'Contracted' : 'Bench'}
                 </button>
               ))}
             </div>
-            <div className="flex gap-1">
-              <button className={`btn ${filterRegion === 'own' ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
-                onClick={() => setFilterRegion(filterRegion === 'own' ? 'all' : 'own')}>
-                {state.regionId.toUpperCase()} Only
-              </button>
-            </div>
+            <button className={`btn ${filterRegion === 'own' ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
+              onClick={() => setFilterRegion(filterRegion === 'own' ? 'all' : 'own')}>
+              {state.regionId.toUpperCase()} Only
+            </button>
           </div>
 
           {!isOffseason && (
             <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
-              Active roster players hidden during regular season — bench &amp; free agents only
+              Active roster players hidden — bench &amp; free agents only
             </div>
           )}
 
-          <div className="text-dim text-xs">{filtered.length} players found</div>
+          {/* Two-pane body */}
+          <div className="flex gap-3" style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
-          {myOffers.length > 0 && (
-            <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-              <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 6 }}>Your Offers</div>
-              <div className="flex-col gap-1">
-                {myOffers.map(offer => {
-                  const p = state.players.get(offer.playerId);
-                  if (!p) return null;
-                  const statusColor = offer.status === 'accepted' ? 'var(--teal)'
-                    : offer.status === 'rejected' ? 'var(--red)'
-                    : offer.status === 'countered' ? 'var(--amber)'
-                    : 'var(--text-secondary)';
+            {/* LEFT: player list */}
+            <div className="flex-col" style={{ flex: 1, minWidth: 0, overflow: 'hidden', gap: 6 }}>
+              <div className="text-dim text-xs">{sorted.length} players found</div>
+              <div className="scroll-area flex-col gap-2" style={{ flex: 1 }}>
+                {sorted.map(p => {
+                  const roleRatings = ROLES
+                    .map(role => state.roleRatings.get(`${p.id}:${role}`))
+                    .filter((rr): rr is PlayerRoleRatingRecord => !!rr)
+                    .map(rr => getDisplayRoleRating(rr, effectiveScouting));
+                  const sellingTeam = p.teamId ? state.teams.get(p.teamId) : undefined;
+                  const contract = p.contractId ? state.contracts.get(p.contractId) : undefined;
+                  const buyout = (sellingTeam && contract)
+                    ? computeBuyout(p, contract, sellingTeam, state.season) : undefined;
                   return (
-                    <div key={offer.id} className="flex justify-between items-center" style={{ padding: '5px 8px', background: 'var(--bg-2)', border: '1px solid var(--border)', fontSize: 12 }}>
-                      <div className="flex gap-2 items-center">
-                        <RoleBadge role={p.primaryRole} />
-                        <span style={{ fontWeight: 600 }}>{p.alias}</span>
-                        <span className="text-dim">${offer.offeredSalary.toLocaleString()}/yr · {offer.contractLength}yr</span>
-                      </div>
-                      <div className="flex gap-2 items-center">
-                        {offer.status === 'countered' && offer.counterSalary && (
-                          <span style={{ color: 'var(--amber)', fontSize: 11 }}>counter: ${offer.counterSalary.toLocaleString()}/yr</span>
-                        )}
-                        <span className="font-head uppercase" style={{ color: statusColor, fontSize: 11 }}>{offer.status}</span>
-                      </div>
-                    </div>
+                    <PlayerCard
+                      key={p.id}
+                      player={p}
+                      roleRatings={roleRatings}
+                      onOffer={setOfferTarget}
+                      hasPendingOffer={pendingOfferPlayerIds.has(p.id)}
+                      isLocked={outgoingBlocked || lockedPlayerIds?.has(p.id)}
+                      buyout={buyout}
+                    />
                   );
                 })}
+                {sorted.length === 0 && (
+                  <div className="text-dim text-sm" style={{ padding: 20 }}>No players match your filters.</div>
+                )}
               </div>
             </div>
-          )}
 
-          <div className="scroll-area flex-col gap-2" style={{ flex: 1 }}>
-            {filtered.map(p => {
-              const roleRatings = ROLES
-                .map(role => state.roleRatings.get(`${p.id}:${role}`))
-                .filter((rr): rr is PlayerRoleRatingRecord => !!rr)
-                .map(rr => getDisplayRoleRating(rr, effectiveScouting));
-              return (
-                <PlayerCard
-                  key={p.id}
-                  player={p}
-                  roleRatings={roleRatings}
-                  onOffer={setOfferTarget}
-                  showOffer={!pendingOfferPlayerIds.has(p.id)}
-                  isLocked={outgoingBlocked || lockedPlayerIds?.has(p.id)}
-                />
-              );
-            })}
-            {filtered.length === 0 && (
-              <div className="text-dim text-sm" style={{ padding: 20 }}>No players match your filters.</div>
-            )}
+            {/* RIGHT: roster + offers */}
+            <div className="flex-col" style={{ width: 240, flexShrink: 0, gap: 8, overflow: 'hidden' }}>
+
+              {/* Roster box */}
+              <div className="card flex-col" style={{ padding: '10px 12px', gap: 4, flexShrink: 0 }}>
+                <div className="text-dim text-xs font-head uppercase" style={{ marginBottom: 4 }}>Your Roster</div>
+                {rosterStarters.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginBottom: 2 }}>STARTERS</div>
+                    {rosterStarters.map(p => (
+                      <div key={p.id} className="flex justify-between items-center" style={{ fontSize: 12 }}>
+                        <div className="flex gap-1 items-center" style={{ minWidth: 0 }}>
+                          <RoleBadge role={p.primaryRole} />
+                          <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.alias}</span>
+                        </div>
+                        <div className="flex gap-2 items-center" style={{ flexShrink: 0, marginLeft: 6 }}>
+                          <span className="font-mono" style={{ fontSize: 11 }}>{overallRating(p)}</span>
+                          <span className="text-dim" style={{ fontSize: 10 }}>${Math.round(p.salary / 1000)}k</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {rosterBench.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--text-dim)', marginTop: 6, marginBottom: 2 }}>BENCH</div>
+                    {rosterBench.map(p => (
+                      <div key={p.id} className="flex justify-between items-center" style={{ fontSize: 12, opacity: 0.75 }}>
+                        <div className="flex gap-1 items-center" style={{ minWidth: 0 }}>
+                          <RoleBadge role={p.primaryRole} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.alias}</span>
+                        </div>
+                        <div className="flex gap-2 items-center" style={{ flexShrink: 0, marginLeft: 6 }}>
+                          <span className="font-mono" style={{ fontSize: 11 }}>{overallRating(p)}</span>
+                          <span className="text-dim" style={{ fontSize: 10 }}>${Math.round(p.salary / 1000)}k</span>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {rosterStarters.length === 0 && rosterBench.length === 0 && (
+                  <div className="text-dim text-xs">No players on roster.</div>
+                )}
+              </div>
+
+              {/* Offers box */}
+              {myOffers.length > 0 && (
+                <div className="card flex-col" style={{ padding: '10px 12px', gap: 4, flex: 1, overflow: 'hidden' }}>
+                  <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
+                    <span className="text-dim text-xs font-head uppercase">Your Offers</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{myOffers.length}</span>
+                  </div>
+                  <div className="scroll-area flex-col gap-1" style={{ flex: 1 }}>
+                    {myOffers.map(offer => {
+                      const p = state.players.get(offer.playerId);
+                      if (!p) return null;
+                      const statusColor = offer.status === 'accepted' ? 'var(--teal)'
+                        : offer.status === 'rejected' ? 'var(--red)'
+                        : offer.status === 'countered' ? 'var(--amber)'
+                        : 'var(--text-secondary)';
+                      return (
+                        <div key={offer.id} className="flex-col" style={{ padding: '5px 8px', background: 'var(--bg-2)', border: '1px solid var(--border)', fontSize: 12, gap: 2 }}>
+                          <div className="flex gap-1 items-center">
+                            <RoleBadge role={p.primaryRole} />
+                            <span style={{ fontWeight: 600 }}>{p.alias}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-dim" style={{ fontSize: 10 }}>${offer.offeredSalary.toLocaleString()}/yr · {offer.contractLength}yr</span>
+                            <span className="font-head uppercase" style={{ color: statusColor, fontSize: 10 }}>{offer.status}</span>
+                          </div>
+                          {offer.status === 'countered' && offer.counterSalary && (
+                            <div style={{ color: 'var(--amber)', fontSize: 10 }}>counter: ${offer.counterSalary.toLocaleString()}/yr</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
 
           {offerTarget && (
