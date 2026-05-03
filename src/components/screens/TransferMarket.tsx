@@ -64,7 +64,8 @@ interface Props {
 
 type Tab = 'players' | 'coaches';
 type FilterRole = PlayerRole | 'all';
-type FilterStatus = 'all' | 'free' | 'contracted';
+type FilterStatus = 'all' | 'free' | 'contracted' | 'bench';
+type FilterRegion = 'all' | 'own';
 
 function acceptanceLikelihood(
   player: Player,
@@ -362,6 +363,7 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
   // ── Players tab state ──
   const [filterRole, setFilterRole] = useState<FilterRole>('all');
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterRegion, setFilterRegion] = useState<FilterRegion>('own');
   const [search, setSearch] = useState('');
   const [offerTarget, setOfferTarget] = useState<Player | null>(null);
 
@@ -375,26 +377,39 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
     return effectiveCoachStat(team, state.coaches, 'scouting');
   }, [state]);
 
+  const isOffseason = state.phase === 'offseason';
+
   const allPlayers = useMemo(() => {
     const out: Player[] = [];
     state.players.forEach(p => {
       if (p.teamId === state.playerTeamId) return;
+      // During regular season / playoffs, hide active-rostered players (bench OK)
+      if (!isOffseason && p.teamId) {
+        const team = state.teams.get(p.teamId);
+        if (team && team.rosterIds.includes(p.id)) return;
+      }
       out.push(p);
     });
     return out.sort((a, b) => (b.aim + b.gameSense) - (a.aim + a.gameSense));
-  }, [state]);
+  }, [state, isOffseason]);
 
   const filtered = useMemo(() => {
     return allPlayers.filter(p => {
       if (filterRole !== 'all' && p.primaryRole !== filterRole) return false;
       if (filterStatus === 'free' && p.teamId) return false;
       if (filterStatus === 'contracted' && !p.teamId) return false;
+      if (filterStatus === 'bench') {
+        if (!p.teamId) return false;
+        const team = state.teams.get(p.teamId);
+        if (!team || !team.subIds.includes(p.id)) return false;
+      }
+      if (filterRegion === 'own' && p.region !== state.regionId) return false;
       if (search && !p.alias.toLowerCase().includes(search.toLowerCase()) &&
           !p.firstName.toLowerCase().includes(search.toLowerCase()) &&
           !p.lastName.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [allPlayers, filterRole, filterStatus, search]);
+  }, [allPlayers, filterRole, filterStatus, filterRegion, search, state.regionId]);
 
   const freeAgentCoaches = useMemo(() => {
     return state.freeAgentCoaches
@@ -476,14 +491,26 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
               ))}
             </div>
             <div className="flex gap-1">
-              {(['all', 'free', 'contracted'] as const).map(s => (
+              {(['all', 'free', 'contracted', 'bench'] as const).map(s => (
                 <button key={s} className={`btn ${filterStatus === s ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
                   onClick={() => setFilterStatus(s)}>
-                  {s === 'all' ? 'All' : s === 'free' ? 'Free Agents' : 'Contracted'}
+                  {s === 'all' ? 'All' : s === 'free' ? 'Free Agents' : s === 'contracted' ? 'Contracted' : 'Bench'}
                 </button>
               ))}
             </div>
+            <div className="flex gap-1">
+              <button className={`btn ${filterRegion === 'own' ? 'btn-red' : ''}`} style={{ fontSize: 11 }}
+                onClick={() => setFilterRegion(filterRegion === 'own' ? 'all' : 'own')}>
+                {state.regionId.toUpperCase()} Only
+              </button>
+            </div>
           </div>
+
+          {!isOffseason && (
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>
+              Active roster players hidden during regular season — bench &amp; free agents only
+            </div>
+          )}
 
           <div className="text-dim text-xs">{filtered.length} players found</div>
 

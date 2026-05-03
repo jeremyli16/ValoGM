@@ -697,8 +697,9 @@ function simMatchIds(ids: string[], bracket: PlayoffBracket, state: GameState, r
   }
 }
 
-// Masters: 6 rounds
-// 1: Swiss R1+R2  2: Swiss R3  3: Main UBR1+LBR1  4: UBSF+LBQF  5: UBF+LBSF  6: LBF+GF
+// Masters: 10 rounds
+// 1: Swiss R1 (4)  2: Swiss R2 (4)  3: Swiss R3 + UBR1_A/B → main_event
+// 4: UBR1_C/D  5: LBR1  6: UBSF  7: LBQF  8: UBF+LBSF  9: LBF  10: GF
 export function simMastersRound(
   tournament: InternationalTournament,
   state: GameState,
@@ -707,34 +708,47 @@ export function simMastersRound(
 ): void {
   if (round === 1) {
     initSwissStage(tournament, rng);
-    simSwissRound(tournament, state, rng, 1);
-    simSwissRound(tournament, state, rng, 2);
+    simSwissRound(tournament, state, rng, 1);   // sims R1, fills R2 slots
     tournament.phase = 'play_in';
   } else if (round === 2) {
-    simSwissRound(tournament, state, rng, 3);
+    simSwissRound(tournament, state, rng, 2);   // sims R2, fills R3 slots
   } else if (round === 3) {
+    simSwissRound(tournament, state, rng, 3);   // sims R3
     if (!tournament.seedOneChoice) pickAIS1Choice(tournament, state);
     buildMastersMainBracket(tournament, state);
     const bracket = tournament.mainBracket!;
-    simMatchIds(['MN_UBR1_A','MN_UBR1_B','MN_UBR1_C','MN_UBR1_D','MN_LBR1_A','MN_LBR1_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['MN_UBR1_A','MN_UBR1_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
     tournament.phase = 'main_event';
   } else if (round === 4) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['MN_UBSF1','MN_UBSF2','MN_LBQF_A','MN_LBQF_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['MN_UBR1_C','MN_UBR1_D'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
   } else if (round === 5) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['MN_UBF','MN_LBSF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['MN_LBR1_A','MN_LBR1_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
   } else if (round === 6) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['MN_LBF','MN_GF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['MN_UBSF1','MN_UBSF2'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 7) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_LBQF_A','MN_LBQF_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 8) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_UBF','MN_LBSF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 9) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_LBF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 10) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['MN_GF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
     finalizeTournament(tournament, bracket, 'MN_GF', state);
   }
 }
 
-export const MASTERS_ROUNDS   = 6;
+export const MASTERS_ROUNDS = 10;
 
-// Champions: 5 rounds
-// 1: Groups  2: UBQF+LBR1  3: UBSF+LBQF  4: UBF+LBSF  5: LBF+GF
+// Champions: 9 rounds
+// 1: Groups → play_in  2: UBQF_A/B → main_event  3: UBQF_C/D  4: LBR1
+// 5: UBSF  6: LBQF  7: UBF+LBSF  8: LBF  9: GF
 export function simChampionsRound(
   tournament: InternationalTournament,
   state: GameState,
@@ -748,19 +762,31 @@ export function simChampionsRound(
   } else if (round === 2) {
     buildChampionsPlayoffBracket(tournament, rng);
     const bracket = tournament.mainBracket!;
-    simMatchIds(['CP_UBQF_A','CP_UBQF_B','CP_UBQF_C','CP_UBQF_D','CP_LBR1_A','CP_LBR1_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['CP_UBQF_A','CP_UBQF_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
     tournament.phase = 'main_event';
   } else if (round === 3) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['CP_UBSF1','CP_UBSF2','CP_LBQF_A','CP_LBQF_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['CP_UBQF_C','CP_UBQF_D'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
   } else if (round === 4) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['CP_UBF','CP_LBSF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['CP_LBR1_A','CP_LBR1_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
   } else if (round === 5) {
     const bracket = tournament.mainBracket; if (!bracket) return;
-    simMatchIds(['CP_LBF','CP_GF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+    simMatchIds(['CP_UBSF1','CP_UBSF2'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 6) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_LBQF_A','CP_LBQF_B'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 7) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_UBF','CP_LBSF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 8) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_LBF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
+  } else if (round === 9) {
+    const bracket = tournament.mainBracket; if (!bracket) return;
+    simMatchIds(['CP_GF'], bracket, state, rng, tournament, MAIN_EVENT_WEIGHT);
     finalizeTournament(tournament, bracket, 'CP_GF', state);
   }
 }
 
-export const CHAMPIONS_ROUNDS = 5;
+export const CHAMPIONS_ROUNDS = 9;
