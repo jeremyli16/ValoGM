@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { GameState, PlayoffBracket, PlayoffMatch, StandingsRow } from '../../types';
 import { sortStandings, buildPlayoffBracket } from '../../engine/leagueInit';
 
@@ -14,14 +15,14 @@ function getOriginalSeeds(bracket: PlayoffBracket): string[] {
   const lr1a = find('LR1A');
   const lr1b = find('LR1B');
   return [
-    usf1?.teamAId,   // s1 = A1 (bye)
-    usf2?.teamAId,   // s2 = B1 (bye)
-    ur1b?.teamAId,   // s3 = A2
-    ur1a?.teamAId,   // s4 = B2
-    ur1a?.teamBId,   // s5 = A3
-    ur1b?.teamBId,   // s6 = B3
-    lr1b?.teamBId,   // s7 = A4
-    lr1a?.teamBId,   // s8 = B4
+    usf1?.teamAId,
+    usf2?.teamAId,
+    ur1b?.teamAId,
+    ur1a?.teamAId,
+    ur1a?.teamBId,
+    ur1b?.teamBId,
+    lr1b?.teamBId,
+    lr1a?.teamBId,
   ].filter((id): id is string => !!id);
 }
 
@@ -65,18 +66,116 @@ function getDisplayBracket(state: GameState): {
   return { bracket, isProjected: true, seeds };
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Layout Constants ─────────────────────────────────────────────────────────
 
-const ROUND_LABEL: Record<string, string> = {
-  UR1A: 'Upper R1', UR1B: 'Upper R1',
-  USF1: 'Upper SF', USF2: 'Upper SF',
-  UF:   'Upper Final',
-  LR1A: 'Lower R1', LR1B: 'Lower R1',
-  LR2A: 'Lower R2', LR2B: 'Lower R2',
-  LR3:  'Lower SF',
-  LF:   'Lower Final',
-  GF:   'Grand Final',
+const CARD_W      = 188;
+const CARD_H      = 74;
+const GAP         = 8;
+const CONN_W      = 22;
+const PAIR_H      = 2 * CARD_H + GAP;
+const SECTION_GAP = 20;
+
+// ─── Tier Styling (A) ─────────────────────────────────────────────────────────
+
+const TIER_BORDER: Record<string, string> = {
+  upper: 'rgba(74,158,255,0.40)',
+  lower: 'rgba(245,166,35,0.38)',
+  gf:    'rgba(255,184,0,0.55)',
 };
+const TIER_BG: Record<string, string> = {
+  upper: 'rgba(74,158,255,0.04)',
+  lower: 'rgba(245,166,35,0.04)',
+  gf:    'rgba(255,184,0,0.07)',
+};
+
+// ─── Routing Labels (E) ───────────────────────────────────────────────────────
+
+const ROUTING: Record<string, { win: string; lose?: string }> = {
+  UR1A: { win: 'Upper SF',    lose: 'Lower R1'    },
+  UR1B: { win: 'Upper SF',    lose: 'Lower R1'    },
+  USF1: { win: 'Upper Final', lose: 'Lower R2'    },
+  USF2: { win: 'Upper Final', lose: 'Lower R2'    },
+  UF:   { win: 'Grand Final', lose: 'Lower Final' },
+  LR1A: { win: 'Lower R2'   },
+  LR1B: { win: 'Lower R2'   },
+  LR2A: { win: 'Lower SF'   },
+  LR2B: { win: 'Lower SF'   },
+  LR3:  { win: 'Lower Final' },
+  LF:   { win: 'Grand Final' },
+  GF:   { win: 'Champion'    },
+};
+
+// ─── Connector SVGs (F) ───────────────────────────────────────────────────────
+
+// Two cards at same heights → two straight horizontal lines (col1→col2 in upper/lower)
+function PairConnector() {
+  const y1 = CARD_H / 2;
+  const y2 = CARD_H + GAP + CARD_H / 2;
+  return (
+    <svg width={CONN_W} height={PAIR_H} style={{ flexShrink: 0, display: 'block' }}>
+      <line x1={0} y1={y1} x2={CONN_W} y2={y1} stroke="var(--border)" strokeWidth={1} />
+      <line x1={0} y1={y2} x2={CONN_W} y2={y2} stroke="var(--border)" strokeWidth={1} />
+    </svg>
+  );
+}
+
+// Two cards → one card centered in PAIR_H (Y-merge: USF→UF, LR2→LR3)
+function YConnector() {
+  const y1   = CARD_H / 2;
+  const y2   = CARD_H + GAP + CARD_H / 2;
+  const yMid = PAIR_H / 2;
+  const xMid = CONN_W / 2;
+  return (
+    <svg width={CONN_W} height={PAIR_H} style={{ flexShrink: 0, display: 'block' }}>
+      <line x1={0}    y1={y1}   x2={xMid}  y2={y1}   stroke="var(--border)" strokeWidth={1} />
+      <line x1={0}    y1={y2}   x2={xMid}  y2={y2}   stroke="var(--border)" strokeWidth={1} />
+      <line x1={xMid} y1={y1}   x2={xMid}  y2={y2}   stroke="var(--border)" strokeWidth={1} />
+      <line x1={xMid} y1={yMid} x2={CONN_W} y2={yMid} stroke="var(--border)" strokeWidth={1} />
+    </svg>
+  );
+}
+
+// One card centered in PAIR_H → one card centered in PAIR_H (LR3→LF, UF→GF)
+function SingleConnector() {
+  const y = PAIR_H / 2;
+  return (
+    <svg width={CONN_W} height={PAIR_H} style={{ flexShrink: 0, display: 'block' }}>
+      <line x1={0} y1={y} x2={CONN_W} y2={y} stroke="var(--border)" strokeWidth={1} />
+    </svg>
+  );
+}
+
+// Vertical dashed bridge connecting GF (above) and LF (below) in the same column
+function VerticalBridge() {
+  const x = CONN_W + CARD_W / 2;
+  return (
+    <svg width={CONN_W + CARD_W} height={SECTION_GAP} style={{ display: 'block', flexShrink: 0 }}>
+      <line x1={x} y1={0} x2={x} y2={SECTION_GAP}
+        stroke="var(--border)" strokeWidth={1} strokeDasharray="3,3" />
+    </svg>
+  );
+}
+
+// ─── Column Wrappers (D) ──────────────────────────────────────────────────────
+
+function TwoCardCol({ top, bottom }: { top: ReactNode; bottom: ReactNode }) {
+  return (
+    <div style={{ width: CARD_W, display: 'flex', flexDirection: 'column', gap: GAP, flexShrink: 0 }}>
+      {top}
+      {bottom}
+    </div>
+  );
+}
+
+function OneCardCol({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ width: CARD_W, height: PAIR_H, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+      <div style={{ width: '100%' }}>{children}</div>
+    </div>
+  );
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function TeamSlot({ name, seed, isPlayer, won, score, tbd }: {
   name: string;
@@ -132,37 +231,32 @@ function TeamSlot({ name, seed, isPlayer, won, score, tbd }: {
   );
 }
 
-function MatchCard({ match, state, seeds, playerTeamId }: {
+// B: no internal round label; A: tier border/bg; E: routing footer
+function MatchCard({ match, state, seeds, playerTeamId, tier }: {
   match: PlayoffMatch;
   state: GameState;
   seeds: string[];
   playerTeamId: string;
+  tier: 'upper' | 'lower' | 'gf';
 }) {
   const teamA = match.teamAId ? state.teams.get(match.teamAId) : null;
   const teamB = match.teamBId ? state.teams.get(match.teamBId) : null;
-  const res = match.result;
-
+  const res   = match.result;
   const seedA = match.teamAId ? seeds.indexOf(match.teamAId) : -1;
   const seedB = match.teamBId ? seeds.indexOf(match.teamBId) : -1;
-
   const hasPlayer = match.teamAId === playerTeamId || match.teamBId === playerTeamId;
+  const routing = ROUTING[match.round];
 
   return (
-    <div className="card" style={{
-      padding: '9px 11px', width: '100%',
-      borderColor: hasPlayer ? 'var(--red-dim)' : undefined,
+    <div style={{
+      padding: '8px 10px',
+      border: `1px solid ${hasPlayer ? 'var(--red)' : TIER_BORDER[tier]}`,
+      background: TIER_BG[tier],
+      borderRadius: 3,
+      width: '100%',
+      boxSizing: 'border-box',
     }}>
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        marginBottom: 6,
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-head)', fontSize: 9,
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          color: 'var(--text-secondary)',
-        }}>
-          {ROUND_LABEL[match.round] ?? match.round}
-        </span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-dim)' }}>
           {match.format.toUpperCase()}
         </span>
@@ -184,31 +278,32 @@ function MatchCard({ match, state, seeds, playerTeamId }: {
         score={res ? res.winsB : null}
         tbd={!teamB}
       />
+      {!res && routing && (
+        <div style={{
+          display: 'flex', gap: 8, marginTop: 5,
+          paddingTop: 4, borderTop: '1px solid var(--border-dim)',
+          fontFamily: 'var(--font-mono)', fontSize: 9,
+        }}>
+          <span style={{ color: 'var(--teal)' }}>W→ {routing.win}</span>
+          {routing.lose && <span style={{ color: 'var(--amber)' }}>L→ {routing.lose}</span>}
+        </div>
+      )}
     </div>
   );
 }
 
-function BracketColumn({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{
-        fontFamily: 'var(--font-head)', fontSize: 9,
-        textTransform: 'uppercase', letterSpacing: '0.1em',
-        color: 'var(--text-dim)', marginBottom: 8,
-      }}>
-        {label}
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
+// ─── Section Label ────────────────────────────────────────────────────────────
 
-function CenteredMatch({ children, minHeight }: { children: React.ReactNode; minHeight?: number }) {
+function SectionLabel({ label, color }: { label: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', flex: 1, minHeight }}>
-      <div style={{ width: '100%' }}>{children}</div>
+    <div style={{
+      fontFamily: 'var(--font-head)', fontSize: 10,
+      textTransform: 'uppercase', letterSpacing: '0.1em',
+      color: color ?? 'var(--text-secondary)',
+      marginBottom: 10,
+      borderBottom: '1px solid var(--border-dim)', paddingBottom: 5,
+    }}>
+      {label}
     </div>
   );
 }
@@ -234,20 +329,20 @@ export function Playoffs({ state }: Props) {
     );
   }
 
-  const card = (round: string) => {
+  const card = (round: string, tier: 'upper' | 'lower' | 'gf') => {
     const m = bracket.matches.find(x => x.round === round);
-    if (!m) return null;
-    return <MatchCard match={m} state={state} seeds={seeds} playerTeamId={state.playerTeamId} />;
+    if (!m) return <div style={{ height: CARD_H, width: CARD_W }} />;
+    return <MatchCard match={m} state={state} seeds={seeds} playerTeamId={state.playerTeamId} tier={tier} />;
   };
 
   const champion = bracket.champion ? state.teams.get(bracket.champion) : null;
-  const CARD_H = 84;
+  const playerIsChamp = bracket.champion === state.playerTeamId;
 
   return (
-    <div style={{ height: '100%', padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ height: '100%', padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
         <h2 className="font-head" style={{ fontSize: 18 }}>
           Playoffs — Season {state.season}
         </h2>
@@ -263,97 +358,61 @@ export function Playoffs({ state }: Props) {
       </div>
 
       {isProjected && (
-        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -12 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: -16, flexShrink: 0 }}>
           Seedings based on current standings. Top 4 from each group qualify.
         </p>
       )}
 
-      {/* Upper Bracket */}
-      <div>
-        <div style={{
-          fontFamily: 'var(--font-head)', fontSize: 11,
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          color: 'var(--text-secondary)', marginBottom: 12,
-          borderBottom: '1px solid var(--border-dim)', paddingBottom: 6,
-        }}>
-          Upper Bracket
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <BracketColumn label="Round 1">
-            {card('UR1A')}
-            {card('UR1B')}
-          </BracketColumn>
-          <BracketColumn label="Semifinals">
-            <CenteredMatch minHeight={CARD_H}>{card('USF1')}</CenteredMatch>
-            <CenteredMatch minHeight={CARD_H}>{card('USF2')}</CenteredMatch>
-          </BracketColumn>
-          <BracketColumn label="Final">
-            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('UF')}</CenteredMatch>
-          </BracketColumn>
+      {/* Upper Bracket + Grand Final inline */}
+      <div style={{ flexShrink: 0 }}>
+        <SectionLabel label="Upper Bracket" color="rgba(74,158,255,0.7)" />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <TwoCardCol top={card('UR1A', 'upper')} bottom={card('UR1B', 'upper')} />
+          <PairConnector />
+          <TwoCardCol top={card('USF1', 'upper')} bottom={card('USF2', 'upper')} />
+          <YConnector />
+          <OneCardCol>{card('UF', 'upper')}</OneCardCol>
+          <SingleConnector />
+          <OneCardCol>{card('GF', 'gf')}</OneCardCol>
+          {champion && (
+            <div style={{
+              marginLeft: 20, flexShrink: 0,
+              padding: '14px 20px',
+              border: '1px solid var(--amber)',
+              background: 'rgba(255,184,0,0.06)',
+              borderRadius: 3,
+              minWidth: 140,
+            }}>
+              <div style={{
+                fontFamily: 'var(--font-mono)', fontSize: 9,
+                color: 'var(--amber)', textTransform: 'uppercase',
+                letterSpacing: '0.1em', marginBottom: 6,
+              }}>
+                Champion
+              </div>
+              <div className="font-head" style={{
+                fontSize: 18,
+                color: playerIsChamp ? 'var(--teal)' : 'var(--amber)',
+              }}>
+                {playerIsChamp ? '★ ' : ''}{champion.name}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Lower Bracket */}
-      <div>
-        <div style={{
-          fontFamily: 'var(--font-head)', fontSize: 11,
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          color: 'var(--text-secondary)', marginBottom: 12,
-          borderBottom: '1px solid var(--border-dim)', paddingBottom: 6,
-        }}>
-          Lower Bracket
+      <div style={{ flexShrink: 0 }}>
+        <SectionLabel label="Lower Bracket" color="rgba(245,166,35,0.7)" />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <TwoCardCol top={card('LR1A', 'lower')} bottom={card('LR1B', 'lower')} />
+          <PairConnector />
+          <TwoCardCol top={card('LR2A', 'lower')} bottom={card('LR2B', 'lower')} />
+          <YConnector />
+          <OneCardCol>{card('LR3', 'lower')}</OneCardCol>
+          <SingleConnector />
+          <OneCardCol>{card('LF', 'lower')}</OneCardCol>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
-          <BracketColumn label="Round 1">
-            {card('LR1A')}
-            {card('LR1B')}
-          </BracketColumn>
-          <BracketColumn label="Round 2">
-            <CenteredMatch minHeight={CARD_H}>{card('LR2A')}</CenteredMatch>
-            <CenteredMatch minHeight={CARD_H}>{card('LR2B')}</CenteredMatch>
-          </BracketColumn>
-          <BracketColumn label="Semifinal">
-            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('LR3')}</CenteredMatch>
-          </BracketColumn>
-          <BracketColumn label="Final">
-            <CenteredMatch minHeight={CARD_H * 2 + 8}>{card('LF')}</CenteredMatch>
-          </BracketColumn>
-        </div>
-      </div>
-
-      {/* Grand Final */}
-      <div>
-        <div style={{
-          fontFamily: 'var(--font-head)', fontSize: 11,
-          textTransform: 'uppercase', letterSpacing: '0.08em',
-          color: 'var(--amber)', marginBottom: 12,
-          borderBottom: '1px solid var(--border-dim)', paddingBottom: 6,
-        }}>
-          Grand Final
-        </div>
-        <div style={{ maxWidth: 260 }}>
-          {card('GF')}
-        </div>
-        {champion && (
-          <div className="card" style={{
-            maxWidth: 260, marginTop: 10,
-            padding: '12px 16px',
-            background: 'var(--teal-dim)',
-            borderColor: 'var(--teal)',
-            textAlign: 'center',
-          }}>
-            <div style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10,
-              color: 'var(--teal)', textTransform: 'uppercase',
-              letterSpacing: '0.1em', marginBottom: 6,
-            }}>
-              Champion
-            </div>
-            <div className="font-head text-teal bold" style={{ fontSize: 20 }}>
-              {champion.name}
-            </div>
-          </div>
-        )}
       </div>
 
     </div>
