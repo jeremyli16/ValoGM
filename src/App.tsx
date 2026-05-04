@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { GameState, RegionId, Player, CoachRole, InternationalTournament as ITournament } from './types';
 import { HOME_NATIONALITIES } from './types';
 import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer, isTeamAliveInTournament } from './engine/gameLoop';
-import { initNewGameDb, persistGameState } from './db/repos';
+import { initNewGameDb, persistGameState, loadGameState } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
 import { Roster } from './components/screens/Roster';
@@ -23,9 +23,15 @@ type NavItem = 'dashboard' | 'roster' | 'transfers' | 'matchday' | 'standings' |
 export function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [nav, setNav] = useState<NavItem>('dashboard');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [importViolators, setImportViolators] = useState<Player[]>([]);
   const [viewingTournament, setViewingTournament] = useState<ITournament | null>(null);
+
+  useEffect(() => {
+    loadGameState().then(saved => {
+      if (saved) setGameState(saved as GameState);
+    }).finally(() => setLoading(false));
+  }, []);
 
   const lockedPlayerIds = useMemo(() => {
     const t = gameState?.phase === 'inter_tournament' ? gameState.activeInternationalTournament : null;

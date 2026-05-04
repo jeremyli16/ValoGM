@@ -105,6 +105,7 @@ export interface SerializedGameState {
   activeMapPool?: string[];
   agentMeta?: Record<string, number>;
   agentMapMeta?: Record<string, Record<string, number>>;
+  playoffBracket?: PlayoffBracket | null;
 }
 
 let _db: IDBPDatabase<ValoGMSchema> | null = null;

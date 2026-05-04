@@ -256,6 +256,7 @@ export async function persistGameState(state: GameState): Promise<void> {
     activeMapPool: state.activeMapPool,
     agentMeta: state.agentMeta,
     agentMapMeta: state.agentMapMeta,
+    playoffBracket: state.playoffBracket ?? null,
   });
 
   // 2. Dirty players
@@ -368,7 +369,7 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const saved = await gameStateRepo.load();
   if (!saved) return null;
 
-  const [players, roleRatingsArr, teams, orgs, leagues, matches, coachesArr, offersArr] = await Promise.all([
+  const [players, roleRatingsArr, teams, orgs, leagues, matches, coachesArr, offersArr, notifsArr] = await Promise.all([
     (await getDb()).getAll('players'),
     (await getDb()).getAll('playerRoleRatings'),
     (await getDb()).getAll('teams'),
@@ -377,6 +378,7 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     matchRepo.getForSeason(saved.season),
     coachRepo.getAll(),
     transferOfferRepo.getAll(),
+    (await getDb()).getAll('notifications'),
   ]);
 
   const playerMap = new Map(players.map(p => [p.id, p]));
@@ -417,8 +419,8 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     agentPickCounts: {},
     transferOffers: offersArr,
     pendingDecisions: [],
-    notifications: [],
-    playoffBracket: null,
+    notifications: notifsArr,
+    playoffBracket: saved.playoffBracket ?? null,
     dirtyPlayers: new Set(),
     dirtyMatches: new Set(),
     dirtyCoaches: new Set(),
