@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { GameState } from '../types';
 
@@ -8,6 +9,7 @@ interface Props {
   active: NavItem;
   onNav: (item: NavItem) => void;
   onAdvanceWeek: () => void;
+  onResetGame: () => void;
   children: ReactNode;
 }
 
@@ -62,10 +64,20 @@ function tournamentNavLabel(state: GameState): string {
   return splitNum === 1 ? 'Masters 1' : splitNum === 2 ? 'Masters 2' : 'Champions';
 }
 
-export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props) {
+export function Layout({ state, active, onNav, onAdvanceWeek, onResetGame, children }: Props) {
+  const [confirmReset, setConfirmReset] = useState(false);
   const unread = state.notifications.filter(n => !n.read).length;
-  const pendingRenewals = state.pendingDecisions.filter(d => d.type === 'contract_renewal').length;
   const team = state.teams.get(state.playerTeamId);
+  const renewalsDue = (() => {
+    if (!team) return 0;
+    const ids = [...(team.rosterIds ?? []), ...(team.subIds ?? [])];
+    return ids.filter(id => {
+      const p = state.players.get(id);
+      if (!p?.contractId) return false;
+      const c = state.contracts.get(p.contractId);
+      return c && c.endSeason === state.season;
+    }).length;
+  })();
   const tournamentLabel = tournamentNavLabel(state);
 
   return (
@@ -144,12 +156,12 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
                         padding: '1px 5px', borderRadius: 10,
                       }}>{unread}</span>
                     )}
-                    {item.id === 'finances' && pendingRenewals > 0 && (
+                    {item.id === 'finances' && renewalsDue > 0 && (
                       <span style={{
                         background: 'var(--amber)', color: '#000',
                         fontFamily: 'var(--font-mono)', fontSize: 10,
                         padding: '1px 5px', borderRadius: 10,
-                      }}>{pendingRenewals}</span>
+                      }}>{renewalsDue}</span>
                     )}
                   </div>
                 );
@@ -167,13 +179,46 @@ export function Layout({ state, active, onNav, onAdvanceWeek, children }: Props)
           height: 44, flexShrink: 0,
           background: 'var(--bg-1)',
           borderBottom: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '0 16px',
         }}>
           <button className="btn btn-teal" style={{ fontSize: 12, padding: '5px 16px' }} onClick={onAdvanceWeek}>
             Advance Week ▶
           </button>
+          <button
+            className="btn"
+            style={{ fontSize: 11, color: 'var(--text-dim)', borderColor: 'var(--border)' }}
+            onClick={() => setConfirmReset(true)}
+          >
+            Reset Game
+          </button>
         </div>
+
+        {confirmReset && (
+          <div style={{
+            position: 'fixed', inset: 0, background: '#000a',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200,
+          }}>
+            <div className="card p-4 flex-col gap-4" style={{ width: 340 }}>
+              <div>
+                <div className="font-head" style={{ fontSize: 16, marginBottom: 6 }}>Reset Game</div>
+                <div className="text-dim text-sm">All progress will be lost. This cannot be undone.</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-red"
+                  style={{ flex: 1 }}
+                  onClick={() => { setConfirmReset(false); onResetGame(); }}
+                >
+                  Confirm Reset
+                </button>
+                <button className="btn" style={{ flex: 1 }} onClick={() => setConfirmReset(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* Page content */}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           {children}

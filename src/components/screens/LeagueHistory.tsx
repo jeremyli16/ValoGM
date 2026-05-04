@@ -17,7 +17,7 @@ const ROLE_COLORS: Record<PlayerRole, string> = {
   sentinel:   'var(--role-sentinel)',
 };
 
-const ROW_GRID = '110px 1fr 1fr 1fr auto';
+const ROW_GRID = '110px minmax(80px, 1fr) minmax(80px, 1fr) minmax(80px, 1fr) 152px';
 
 function teamName(state: GameState, id: string): string {
   return state.teams.get(id)?.name ?? '—';
@@ -44,7 +44,11 @@ function RegionRow({ region, gameSeason, split, state }: {
   state: GameState;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const league = Array.from(state.leagues.values()).find(l => l.region === region);
+  // Extract the tier suffix from the player's league ID (e.g. 'partner' or 'challengers')
+  // and look up the matching league for this region directly, avoiding Map order dependency.
+  const leagueSuffix = state.leagueId.replace(/^league_[^_]+_/, '');
+  const league = state.leagues.get(`league_${region}_${leagueSuffix}`)
+    ?? Array.from(state.leagues.values()).find(l => l.region === region);
   if (!league) return null;
 
   const isPlayerRegion = league.id === state.leagueId;
@@ -108,13 +112,13 @@ function RegionRow({ region, gameSeason, split, state }: {
             {REGION_LABEL[region]}{isPlayerRegion ? ' ★' : ''}
           </span>
         </div>
-        <div style={{ fontSize: 13, fontWeight: isPlayerWinner ? 700 : 400, color: isPlayerWinner ? 'var(--teal)' : 'var(--text-primary)' }}>
+        <div style={{ fontSize: 13, fontWeight: isPlayerWinner ? 700 : 400, color: isPlayerWinner ? 'var(--teal)' : 'var(--text-primary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {isPlayerWinner ? '★ ' : ''}{winnerName}
         </div>
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{runnerUpName}</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ fontFamily: 'var(--font-head)', fontSize: 12, fontWeight: 700, color: mvpColor }}>{mvpAlias}</span>
-          {mvpTeamName && <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{mvpTeamName}</span>}
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{runnerUpName}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ fontFamily: 'var(--font-head)', fontSize: 12, fontWeight: 700, color: mvpColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mvpAlias}</span>
+          {mvpTeamName && <span style={{ fontSize: 10, color: 'var(--text-dim)', whiteSpace: 'nowrap', flexShrink: 0 }}>{mvpTeamName}</span>}
         </div>
         <button
           className="btn"
@@ -335,19 +339,20 @@ function TournamentRow({
           fontSize: 13, fontWeight: isPlayerChamp ? 700 : 500,
           color: inProgress ? 'var(--text-dim)' : isPlayerChamp ? 'var(--amber)' : 'var(--text-primary)',
           fontStyle: inProgress ? 'italic' : undefined,
+          minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {inProgress ? 'In progress' : (isPlayerChamp ? '★ ' : '') + champion}
         </div>
-        <div style={{ fontSize: 13, color: inProgress ? 'var(--text-dim)' : 'var(--text-secondary)', fontStyle: inProgress ? 'italic' : undefined }}>
+        <div style={{ fontSize: 13, color: inProgress ? 'var(--text-dim)' : 'var(--text-secondary)', fontStyle: inProgress ? 'italic' : undefined, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {inProgress ? '—' : runnerUp}
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0, overflow: 'hidden' }}>
           {!inProgress && (
             <>
-              <span style={{ fontFamily: 'var(--font-head)', fontSize: 12, fontWeight: 700, color: mvpRole ? ROLE_COLORS[mvpRole] : 'var(--text-primary)' }}>
+              <span style={{ fontFamily: 'var(--font-head)', fontSize: 12, fontWeight: 700, color: mvpRole ? ROLE_COLORS[mvpRole] : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {mvpAlias}
               </span>
-              {mvpTeam && <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{mvpTeam}</span>}
+              {mvpTeam && <span style={{ fontSize: 10, color: 'var(--text-dim)', whiteSpace: 'nowrap', flexShrink: 0 }}>{mvpTeam}</span>}
             </>
           )}
         </div>

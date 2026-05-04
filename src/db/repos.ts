@@ -320,8 +320,7 @@ export async function persistGameState(state: GameState): Promise<void> {
   }
 }
 
-export async function initNewGameDb(state: GameState): Promise<void> {
-  // Clear all stores so no data from previous games bleeds into the new one.
+export async function clearGameDb(): Promise<void> {
   const db = await getDb();
   const storeNames: (keyof ValoGMSchema)[] = [
     'players', 'playerRoleRatings', 'teams', 'orgs', 'leagues',
@@ -329,6 +328,10 @@ export async function initNewGameDb(state: GameState): Promise<void> {
     'notifications', 'playerMatchStats', 'coaches', 'gameState',
   ];
   await Promise.all(storeNames.map(name => db.clear(name as any)));
+}
+
+export async function initNewGameDb(state: GameState): Promise<void> {
+  await clearGameDb();
 
   const players: Player[] = [];
   const roleRatings: PlayerRoleRatingRecord[] = [];

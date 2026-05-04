@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { GameState, RegionId, Player, CoachRole, InternationalTournament as ITournament } from './types';
 import { HOME_NATIONALITIES } from './types';
 import { createNewGame, advanceWeek, makeTransferOffer, releasePlayer, submitRenewalOffer, isTeamAliveInTournament } from './engine/gameLoop';
-import { initNewGameDb, persistGameState, loadGameState } from './db/repos';
+import { initNewGameDb, persistGameState, loadGameState, clearGameDb, notifRepo } from './db/repos';
 import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
 import { Roster } from './components/screens/Roster';
@@ -33,6 +33,18 @@ export function App() {
     }).finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (nav !== 'dashboard' || !gameState) return;
+    const unread = gameState.notifications.filter(n => !n.read);
+    if (unread.length === 0) return;
+    Promise.all(unread.map(n => notifRepo.markRead(n.id)));
+    setGameState(prev => prev ? {
+      ...prev,
+      notifications: prev.notifications.map(n => ({ ...n, read: true })),
+    } : null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav]);
+
   const lockedPlayerIds = useMemo(() => {
     const t = gameState?.phase === 'inter_tournament' ? gameState.activeInternationalTournament : null;
     if (!t || !gameState) return new Set<string>();
@@ -48,6 +60,12 @@ export function App() {
     const t = gameState.activeInternationalTournament;
     return !!t && isTeamAliveInTournament(t, gameState.playerTeamId);
   }, [gameState]);
+
+  const handleResetGame = useCallback(async () => {
+    await clearGameDb();
+    setGameState(null);
+    setNav('dashboard');
+  }, []);
 
   const handleStart = useCallback(async (regionId: RegionId, teamIndex: number, seed: number) => {
     setLoading(true);
@@ -232,7 +250,7 @@ export function App() {
 
   return (
     <>
-      <Layout state={gameState} active={nav} onNav={n => { if (n !== 'tournament') setViewingTournament(null); setNav(n); }} onAdvanceWeek={handleAdvanceWeek}>
+      <Layout state={gameState} active={nav} onNav={n => { if (n !== 'tournament') setViewingTournament(null); setNav(n); }} onAdvanceWeek={handleAdvanceWeek} onResetGame={handleResetGame}>
         {nav === 'dashboard'  && <Dashboard  state={gameState} />}
         {nav === 'roster'     && <Roster     state={gameState} onMovePlayer={handleMovePlayer} onReleasePlayer={handleReleasePlayer} />}
         {nav === 'transfers'  && <TransferMarket state={gameState} onHireCoach={handleHireCoach} onFireCoach={handleFireCoach} onMakeOffer={handleMakeOffer} lockedPlayerIds={lockedPlayerIds} outgoingBlocked={playerOutgoingTransfersBlocked} />}
