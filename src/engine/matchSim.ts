@@ -135,10 +135,19 @@ const ROLE_SURVIVAL_MOD: Record<PlayerRole, number> = {
 // Kill credit modifier per role — duelists get the most individual kills;
 // controllers are util-focused and frag less.
 const ROLE_KILL_MOD: Record<PlayerRole, number> = {
-  duelist:    1.30,
-  initiator:  0.90,
-  controller: 0.80,
+  duelist:    1.25,
+  initiator:  0.95,
+  controller: 0.85,
   sentinel:   0.95,
+};
+
+// Assist probability modifier per role — controllers/initiators provide more utility
+// and thus receive more assist credit.
+const ROLE_ASSIST_MOD: Record<PlayerRole, number> = {
+  duelist:    0.55,
+  initiator:  1.30,
+  controller: 1.60,
+  sentinel:   0.85,
 };
 
 function playerSkillScore(p: PlayerState): number {
@@ -286,14 +295,17 @@ function generateRoundStats(
     o.damage = o.kills * randInt(rng, 60, 100) + chip;
   });
 
-  // Step 6: Assists — 30% chance per kill to give a random teammate an assist.
-  // 60% was producing APR≈0.56 vs real pro average ≈0.28; halved to match.
-  ;[attackerOutcomes, defenderOutcomes].forEach(outcomes => {
+  // Step 6: Assists — 30% chance per kill, distributed toward controllers/initiators.
+  ;[
+    { outcomes: attackerOutcomes, players: attackers },
+    { outcomes: defenderOutcomes, players: defenders },
+  ].forEach(({ outcomes, players }) => {
     outcomes.forEach((o, i) => {
       for (let k = 0; k < o.kills; k++) {
         if (rng() < 0.30) {
           const candidates = [0, 1, 2, 3, 4].filter(x => x !== i);
-          outcomes[candidates[Math.floor(rng() * candidates.length)]].assists++;
+          const weights = candidates.map(x => ROLE_ASSIST_MOD[players[x].assignedRole]);
+          outcomes[weightedChoice(rng, candidates, weights)].assists++;
         }
       }
     });
@@ -707,10 +719,10 @@ function computePlayerStats(
   const KPR_BASE  = 0.75;
   const DPR_BASE  = 0.75;
   const APR_BASE  = 0.28;
-  const ADRA_BASE = 43; // ADR≈140 − KPR×130 ≈ 140 − 97.5 = 42.5
-  const KAST_BASE = KPR_BASE * 0.5 + APR_BASE * 0.15 + 0.3; // ≈ 0.717
-  const FDPR_BASE = DPR_BASE * 0.12;                         // ≈ 0.090
-  const FKPR_BASE = KPR_BASE * 0.18;                         // ≈ 0.135
+  const ADRA_BASE = 43;
+  const KAST_BASE = KPR_BASE * 0.5 + APR_BASE * 0.15 + 0.3;
+  const FDPR_BASE = DPR_BASE * 0.12;
+  const FKPR_BASE = KPR_BASE * 0.18;
 
   return [...statesA, ...statesB].map(s => {
     const r    = Math.max(1, totalRounds);
