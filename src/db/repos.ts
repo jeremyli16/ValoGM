@@ -4,6 +4,7 @@ import type {
   Contract, ScheduledMatch, StandingsRow, TransferOffer,
   Notification, PlayerMatchStat, GameState, Coach,
 } from '../types';
+import { updateStandingsAfterMatch } from '../engine/leagueInit';
 import { MAP_POOL, AGENT_BASELINES } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -111,6 +112,9 @@ export const matchRepo = {
   },
   async putMany(matches: ScheduledMatch[]): Promise<void> {
     await bulkPut('matches', matches);
+  },
+  async getAll(): Promise<ScheduledMatch[]> {
+    return (await getDb()).getAll('matches');
   },
 };
 
@@ -318,6 +322,11 @@ export async function persistGameState(state: GameState): Promise<void> {
   if (state.transferOffers.length > 0) {
     await transferOfferRepo.putMany(state.transferOffers);
   }
+
+  // 7. All standings (always overwrite; needed for multi-season history display)
+  const allStandings: (StandingsRow & { id: string })[] = [];
+  state.standings.forEach((row, key) => allStandings.push({ ...row, id: key }));
+  await standingsRepo.putMany(allStandings);
 }
 
 export async function clearGameDb(): Promise<void> {
@@ -372,16 +381,18 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const saved = await gameStateRepo.load();
   if (!saved) return null;
 
-  const [players, roleRatingsArr, teams, orgs, leagues, matches, coachesArr, offersArr, notifsArr] = await Promise.all([
+  const [players, roleRatingsArr, teams, orgs, leagues, matches, allHistoricalMatches, coachesArr, offersArr, notifsArr, contractsArr] = await Promise.all([
     (await getDb()).getAll('players'),
     (await getDb()).getAll('playerRoleRatings'),
     (await getDb()).getAll('teams'),
     (await getDb()).getAll('orgs'),
     (await getDb()).getAll('leagues'),
     matchRepo.getForSeason(saved.season),
+    matchRepo.getAll(),
     coachRepo.getAll(),
     transferOfferRepo.getAll(),
     (await getDb()).getAll('notifications'),
+    (await getDb()).getAll('contracts'),
   ]);
 
   const playerMap = new Map(players.map(p => [p.id, p]));
@@ -391,12 +402,15 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
   const leagueMap = new Map(leagues.map(l => [l.id, l]));
   const matchMap = new Map(matches.map(m => [m.id, m]));
   const coachMap = new Map(coachesArr.map(c => [c.id, c]));
-
-  const standingsArr = await standingsRepo.getAll();
-  const standingsMap = new Map(standingsArr.map(r => [r.id, r]));
-
-  const contractsArr = await (await getDb()).getAll('contracts');
   const contractMap = new Map(contractsArr.map(c => [c.id, c]));
+
+  // Reconstruct standings from all historical match results — always correct
+  // even for older seasons where IDB standings weren't previously persisted.
+  const standingsMap = new Map<string, StandingsRow>();
+  for (const m of allHistoricalMatches) {
+    if (!m.result || m.isPlayoff) continue;
+    updateStandingsAfterMatch(standingsMap, m.leagueId, m.season, m);
+  }
 
   return {
     ...saved,

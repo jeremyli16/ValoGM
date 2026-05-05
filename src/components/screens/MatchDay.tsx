@@ -116,8 +116,8 @@ function ScoreDisplay({ resultA, resultB, mapName }: { resultA: number; resultB:
   );
 }
 
-const ATK_COLOR = 'var(--amber)';
-const DEF_COLOR = '#4a9eff';
+const ATK_COLOR = 'var(--red)';
+const DEF_COLOR = 'var(--teal)';
 const DIM_COLOR = 'rgba(255,255,255,0.07)';
 
 function RoundTimeline({ rounds, playerIsA, playerTeamName, oppTeamName }: {
@@ -127,58 +127,89 @@ function RoundTimeline({ rounds, playerIsA, playerTeamName, oppTeamName }: {
   oppTeamName: string;
 }) {
   const roundMap = new Map(rounds.map(r => [r.roundNum, r]));
-  // Always show 24 regulation rounds padded with nulls
-  const firstHalf  = Array.from({ length: 12 }, (_, i) => roundMap.get(i + 1)  ?? null);
-  const secondHalf = Array.from({ length: 12 }, (_, i) => roundMap.get(i + 13) ?? null);
-  const overtime   = rounds.filter(r => r.roundNum > 24);
+  const maxRound  = Math.max(24, ...rounds.map(r => r.roundNum));
+  const regNums   = Array.from({ length: 24 },                   (_, i) => i + 1);
+  const otNums    = Array.from({ length: maxRound - 24 },        (_, i) => i + 25);
 
-  const CELL: React.CSSProperties = { width: 20, height: 18, borderRadius: 2, flexShrink: 0 };
-
-  function cellColor(r: RoundResultSummary | null): string {
-    if (!r) return DIM_COLOR;
-    return r.winner === 'attack' ? ATK_COLOR : DEF_COLOR;
+  // Team A always attacks first half (rounds 1–12), defends second half (13–24).
+  // OT: A attacks odd OT rounds (25, 27, …), defends even (26, 28, …).
+  function teamAAttacking(n: number): boolean {
+    if (n <= 12)  return true;
+    if (n <= 24)  return false;
+    return (n - 25) % 2 === 0;
   }
 
-  const renderGroup = (group: (RoundResultSummary | null)[], startNum: number) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+  function cellColor(roundNum: number, forTeamA: boolean): string {
+    const r = roundMap.get(roundNum);
+    if (!r) return DIM_COLOR;
+    const aAtk   = teamAAttacking(roundNum);
+    const myAtk  = forTeamA ? aAtk : !aAtk;
+    const iWon   = myAtk ? r.winner === 'attack' : r.winner === 'defense';
+    if (!iWon) return DIM_COLOR;
+    return myAtk ? ATK_COLOR : DEF_COLOR;
+  }
+
+  const CELL: React.CSSProperties = { width: 18, height: 16, borderRadius: 2, flexShrink: 0 };
+  const LABEL_W = 52;
+
+  const teamAName = playerIsA ? playerTeamName : oppTeamName;
+  const teamBName = playerIsA ? oppTeamName    : playerTeamName;
+
+  function renderNums(nums: number[]) {
+    return (
       <div style={{ display: 'flex', gap: 2 }}>
-        {group.map((_, i) => (
-          <div key={startNum + i} style={{ width: 20, display: 'flex', justifyContent: 'center' }}>
-            <span style={{ fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{startNum + i}</span>
+        {nums.map(n => (
+          <div key={n} style={{ width: 18, display: 'flex', justifyContent: 'center' }}>
+            <span style={{ fontSize: 7, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>{n}</span>
           </div>
         ))}
       </div>
+    );
+  }
+
+  function renderCells(nums: number[], forTeamA: boolean) {
+    return (
       <div style={{ display: 'flex', gap: 2 }}>
-        {group.map((r, i) => (
-          <div key={startNum + i} style={{ ...CELL, background: cellColor(r) }} />
+        {nums.map(n => (
+          <div key={n} style={{ ...CELL, background: cellColor(n, forTeamA) }} />
         ))}
       </div>
-    </div>
-  );
+    );
+  }
+
+  const SEP = <div style={{ width: 1, background: 'rgba(255,255,255,0.12)', alignSelf: 'stretch' }} />;
+
+  function renderRow(name: string, forTeamA: boolean) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ width: LABEL_W, fontSize: 10, fontFamily: 'var(--font-head)', letterSpacing: '0.04em', color: 'var(--text-secondary)', textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {name}
+        </div>
+        {renderCells(regNums.slice(0, 12),  forTeamA)}
+        {SEP}
+        {renderCells(regNums.slice(12, 24), forTeamA)}
+        {otNums.length > 0 && <>{SEP}{renderCells(otNums, forTeamA)}</>}
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {/* Legend */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', paddingLeft: LABEL_W + 6, marginBottom: 2 }}>
         <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: ATK_COLOR }}>■ ATK</span>
         <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: DEF_COLOR }}>■ DEF</span>
-        <span style={{ fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.06em', color: 'var(--text-dim)' }}>
-          {playerIsA ? playerTeamName : oppTeamName} starts attack
-        </span>
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        {renderGroup(firstHalf, 1)}
-        <div style={{ width: 6 }} />
-        {renderGroup(secondHalf, 13)}
-        {overtime.length > 0 && (
-          <>
-            <div style={{ width: 6, alignSelf: 'stretch', display: 'flex', alignItems: 'center' }}>
-              <div style={{ width: 1, height: '100%', background: 'var(--amber)', opacity: 0.4, margin: '0 auto' }} />
-            </div>
-            {renderGroup(overtime.map(r => r), 25)}
-          </>
-        )}
+      {/* Number header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ width: LABEL_W, flexShrink: 0 }} />
+        {renderNums(regNums.slice(0, 12))}
+        <div style={{ width: 1, flexShrink: 0 }} />
+        {renderNums(regNums.slice(12, 24))}
+        {otNums.length > 0 && <><div style={{ width: 1, flexShrink: 0 }} />{renderNums(otNums)}</>}
       </div>
+      {renderRow(teamAName, true)}
+      {renderRow(teamBName, false)}
     </div>
   );
 }
