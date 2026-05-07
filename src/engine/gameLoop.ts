@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   GameState, ScheduledMatch, Player, Team, Organization, League,
   StandingsRow, PlayoffMatch, PlayerRole, Coach,
   Contract, TransferOffer, TransferStatus, SplitRecord, SeasonRecord,
@@ -10,8 +10,7 @@ import {
   HOME_NATIONALITIES, IMPORT_LIMITS, MAP_POOL, AGENT_BASELINES, PRACTICE_BUDGET,
   AGENT_MAP_AFFINITY, AGENT_ROLE,
 } from '../types';
-import type { SeededRng } from './rng';
-import { createRng, randFloat, clamp } from './rng';
+import { randFloat, clamp } from './rng';
 import { developPlayer, applyAgingEffects, updateRoleRatings } from './playerGen';
 import { simMatch } from './matchSim';
 import {
@@ -89,7 +88,7 @@ function getRosterPlayers(state: GameState, teamId: string): Player[] {
 // ─── Map Pool Rotation ────────────────────────────────────────────────────────
 
 function rotateMapPool(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 9999 + 777);
+  const rng = Math.random;
   const roll = rng();
   const swapCount = roll < 0.60 ? 0 : roll < 0.90 ? 1 : 2;
   if (swapCount === 0) return state;
@@ -133,7 +132,7 @@ function rotateMapPool(state: GameState): GameState {
 // ─── Practice Allocation ─────────────────────────────────────────────────────
 
 function applyPracticeAllocation(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 9001 + state.week * 137);
+  const rng = Math.random;
 
   state.teams.forEach((team, teamId) => {
     const pool = team.mapPool ?? {};
@@ -177,7 +176,7 @@ function applyPracticeAllocation(state: GameState): GameState {
 function buildInitialAgentMapMeta(
   agentMeta: Record<string, number>,
   mapPool: string[],
-  rng: SeededRng
+  rng: () => number
 ): Record<string, Record<string, number>> {
   const meta: Record<string, Record<string, number>> = {};
   for (const agent of Object.keys(agentMeta)) {
@@ -193,7 +192,7 @@ function buildInitialAgentMapMeta(
 // ─── Agent Patch ──────────────────────────────────────────────────────────────
 
 function applyAgentPatch(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 7777 + 333);
+  const rng = Math.random;
   const totalSlots = Object.values(state.agentPickCounts).reduce((a, b) => a + b, 0);
 
   const nerfs: string[] = [];
@@ -251,7 +250,7 @@ function applyAgentPatch(state: GameState): GameState {
 // ─── Regular Season Simulation ────────────────────────────────────────────────
 
 function simWeekMatches(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 1000 + state.week);
+  const rng = Math.random;
   const weekMatches = getAllMatchesForWeek(state);
   const partnershipLeagueIds = new Set([state.leagueId, ...state.otherLeagueIds]);
 
@@ -696,7 +695,7 @@ function checkPhaseTransition(state: GameState): GameState {
     for (const lid of allLeagueIds) {
       const lg = state.leagues.get(lid);
       if (!lg) continue;
-      const rng = createRng(state.seed + state.season * 10000 + lid.length);
+      const rng = Math.random;
       const newLeague = { ...lg, currentSeason: state.season, currentAct: 1 };
       state.leagues.set(lid, newLeague);
       generateSchedule(newLeague, state.season, rng).forEach(m => state.matches.set(m.id, m));
@@ -793,7 +792,7 @@ function simFullPlayoffBracket(
 }
 
 function simOtherLeaguesPlayoffs(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 1000 + 50000);
+  const rng = Math.random;
 
   for (const leagueId of state.otherLeagueIds) {
     const league = state.leagues.get(leagueId);
@@ -841,7 +840,7 @@ const PLAYOFF_WEEK_ROUNDS: Record<number, string[]> = {
 
 function simPlayoffStage(state: GameState): GameState {
   if (!state.playoffBracket) return state;
-  const rng = createRng(state.seed + state.season * 1000 + state.week + 10000);
+  const rng = Math.random;
 
   const bracket = state.playoffBracket;
   const roundsThisWeek = PLAYOFF_WEEK_ROUNDS[state.week] ?? [];
@@ -1070,7 +1069,7 @@ function aiHireCoach(state: GameState, team: Team, coach: Coach, role: 'head' | 
 }
 
 function aiMidseasonTick(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 3001 + state.week * 47);
+  const rng = Math.random;
 
   state.teams.forEach((team, teamId) => {
     if (teamId === state.playerTeamId) return;
@@ -1298,7 +1297,7 @@ function processTransferOffers(state: GameState): GameState {
   const pending = state.transferOffers.filter(o => o.status === 'pending');
   if (pending.length === 0) return state;
 
-  const rng = createRng(state.seed + state.season * 100 + state.week + 50_000);
+  const rng = Math.random;
 
   for (const offer of pending) {
     const player = state.players.get(offer.playerId);
@@ -1440,7 +1439,7 @@ function resolveExpiredRenewals(state: GameState): GameState {
 
 // Every offseason week: resolve any submitted renewal offers.
 function processRenewalOffers(state: GameState): GameState {
-  const rng = createRng(state.seed + state.season * 1000 + state.week * 100 + 77);
+  const rng = Math.random;
   const toRemove: string[] = [];
   const pending = state.pendingDecisions.filter(
     d => d.type === 'contract_renewal' && !!d.data.offerPending,
@@ -1606,7 +1605,7 @@ export function advanceWeek(state: GameState): GameState {
     }
     const maxRounds = t.name === 'Champions' ? CHAMPIONS_ROUNDS : MASTERS_ROUNDS;
     const simRound  = (r: number) => {
-      const rng = createRng(state.seed + state.season * 1000 + r + 20000);
+      const rng = Math.random;
       if (t.name === 'Champions') simChampionsRound(t, state, rng, r);
       else simMastersRound(t, state, rng, r);
     };
@@ -1660,14 +1659,9 @@ export function advanceWeek(state: GameState): GameState {
 import { initLeague } from './leagueInit';
 
 const ALL_REGIONS: RegionId[] = ['americas', 'emea', 'pacific', 'china'];
-const REGION_SEED_OFFSETS: Record<RegionId, number> = {
-  americas: 0,
-  emea:     111111,
-  pacific:  222222,
-  china:    333333,
-};
 
-export function createNewGame(regionId: RegionId, teamIndex: number, seed: number): GameState {
+
+export function createNewGame(regionId: RegionId, teamIndex: number): GameState {
   const players    = new Map<string, Player>();
   const teams      = new Map<string, Team>();
   const orgs       = new Map<string, Organization>();
@@ -1684,9 +1678,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
   const otherLeagueIds: string[] = [];
 
   for (const region of ALL_REGIONS) {
-    const regionSeed = seed + REGION_SEED_OFFSETS[region];
-    const regionRng  = createRng(regionSeed);
-    const init       = initLeague(region, regionSeed, regionRng);
+    const init = initLeague(region, Math.random);
 
     init.players.forEach(p => players.set(p.id, p));
     init.teams.forEach(t => teams.set(t.id, t));
@@ -1711,7 +1703,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
   // Player picks a team from their region's partnership league
   const playerLeague = leagues.get(playerLeagueId)!;
   const playerTeamId = playerLeague.teamIds[teamIndex % 12];
-  const activeMapPool = pickInitialMapPool(createRng(seed + 88888));
+  const activeMapPool = pickInitialMapPool(Math.random);
   const agentMeta = { ...AGENT_BASELINES };
 
   return {
@@ -1722,7 +1714,6 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     playerTeamId,
     leagueId: playerLeagueId,
     regionId,
-    seed,
     players,
     teams,
     orgs,
@@ -1742,7 +1733,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number, seed: numbe
     seasonHistory: [],
     activeMapPool,
     agentMeta,
-    agentMapMeta: buildInitialAgentMapMeta(agentMeta, activeMapPool, createRng(seed + 99999)),
+    agentMapMeta: buildInitialAgentMapMeta(agentMeta, activeMapPool, Math.random),
     agentPickCounts: {},
     pendingDecisions: [],
     notifications: [],

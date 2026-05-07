@@ -67,12 +67,12 @@ export function App() {
     setNav('dashboard');
   }, []);
 
-  const handleStart = useCallback(async (regionId: RegionId, teamIndex: number, seed: number) => {
+  const handleStart = useCallback(async (regionId: RegionId, teamIndex: number) => {
     setLoading(true);
     try {
       // Run in a microtask to allow loading indicator to render
       await new Promise(r => setTimeout(r, 30));
-      const state = createNewGame(regionId, teamIndex, seed);
+      const state = createNewGame(regionId, teamIndex);
       await initNewGameDb(state);
       setGameState(state);
       setNav('dashboard');

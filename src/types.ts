@@ -348,7 +348,6 @@ export interface GameState {
   playerTeamId: string;
   leagueId: string;
   regionId: RegionId;
-  seed: number;
 
   players: Map<string, Player>;
   teams: Map<string, Team>;

@@ -7,7 +7,7 @@ import {
   CREDIT_CAP, FULL_BUY_THRESHOLD, HALF_BUY_THRESHOLD,
   getLossBonus, SURVIVAL_BONUS, MAP_ATTACK_BIAS, ROLE_AGENTS, AGENT_ROLE,
 } from '../types';
-import type { SeededRng } from './rng';
+import type { Rng } from './rng';
 import { randInt, clamp, weightedChoice } from './rng';
 
 // ─── Player State for sim ────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ function killWeight(p: PlayerState): number {
 
 // Weighted sampling without replacement: pick `count` indices from players.
 function pickSurvivorIndices(
-  rng: SeededRng,
+  rng: Rng,
   players: PlayerState[],
   count: number,
   weightFn: (p: PlayerState) => number = playerSkillScore
@@ -211,7 +211,7 @@ function generateRoundStats(
   attackerWins: boolean,
   planted: boolean,
   isMatchPoint: boolean,
-  rng: SeededRng
+  rng: Rng
 ): { attackerOutcomes: RoundOutcome[]; defenderOutcomes: RoundOutcome[] } {
   const attackerOutcomes: RoundOutcome[] = attackers.map(() => ({
     survived: false, kills: 0, assists: 0, planted, damage: 0, chipDamage: 0,
@@ -337,7 +337,7 @@ function simRound(
   prevDefBuy: BuyType | null,
   mapBias: number,
   isMatchPoint: boolean,
-  rng: SeededRng
+  rng: Rng
 ): RoundSimResult {
   const { teamBuyType: atkBuyType, individualBuys: atkBuys } =
     decideTeamBuy(atkEcon, atkLossStreak, roundNum, prevDefBuy);
@@ -380,7 +380,7 @@ function simOvertimeRounds(
   teamBPlayers: PlayerState[],
   lastAttackSide: 'A' | 'B',
   mapBias: number,
-  rng: SeededRng
+  rng: Rng
 ): { otA: number; otB: number; rounds: RoundResultSummary[] } {
   // Team that was defending at end of regulation attacks first in OT.
   let otAttackSide: 'A' | 'B' = lastAttackSide === 'A' ? 'B' : 'A';
@@ -481,7 +481,7 @@ function simMap(
   mapName: string,
   statesA: PlayerState[],
   statesB: PlayerState[],
-  rng: SeededRng,
+  rng: Rng,
   agentMeta: Record<string, number> = {},
   agentMapMeta: Record<string, Record<string, number>> = {},
 ): MapResult {
@@ -641,7 +641,7 @@ function resolveMapVeto(
   teamB: Team,
   format: 'bo1' | 'bo3' | 'bo5',
   activeMapPool: string[],
-  rng: SeededRng
+  rng: Rng
 ): string[] {
   // relScore > 0 means Team A favored; < 0 means Team B favored.
   const relScores: Record<string, number> = {};
@@ -779,7 +779,7 @@ export function simMatch(
   playersB: Player[],
   roleRatings: Map<string, PlayerRoleRatingRecord>,
   format: 'bo1' | 'bo3' | 'bo5',
-  rng: SeededRng,
+  rng: Rng,
   activeMapPool: string[],
   modifiers = { teamAMod: 1.0, teamBMod: 1.0 },
   coachTacticsA = 0,

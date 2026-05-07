@@ -2,7 +2,7 @@ import type {
   GameState, Player, Team, PlayoffBracket, PlayoffMatch,
   RegionId, TournamentSeed, InternationalTournament, TournamentPlayerStat,
 } from '../types';
-import { type SeededRng, shuffle } from './rng';
+import { type Rng, shuffle } from './rng';
 import { simMatch } from './matchSim';
 
 // ─── Stage weights for MVP calculation ───────────────────────────────────────
@@ -284,7 +284,7 @@ function simTournamentMatch(
   match: PlayoffMatch,
   bracket: PlayoffBracket,
   state: GameState,
-  rng: SeededRng,
+  rng: Rng,
   tournament?: InternationalTournament,
   weight?: number,
 ): void {
@@ -398,7 +398,7 @@ function tryPairR1(
   return false;
 }
 
-export function initSwissStage(tournament: InternationalTournament, rng: SeededRng): void {
+export function initSwissStage(tournament: InternationalTournament, rng: Rng): void {
   const seeds2 = tournament.qualifiedTeams.filter(t => t.regionalSeed === 2);
   const seeds3 = shuffle(rng, tournament.qualifiedTeams.filter(t => t.regionalSeed === 3));
 
@@ -447,7 +447,7 @@ function fillSwissSlots(bracket: PlayoffBracket, ids: string[], pairs: [string, 
 export function simSwissRound(
   tournament: InternationalTournament,
   state: GameState,
-  rng: SeededRng,
+  rng: Rng,
   roundNum: 1 | 2 | 3,
 ): void {
   const bracket = tournament.playInBracket;
@@ -562,7 +562,7 @@ export function buildMastersMainBracket(
 
 // ─── Champions Group Stage ────────────────────────────────────────────────────
 
-export function initChampionsGroups(tournament: InternationalTournament, rng: SeededRng): void {
+export function initChampionsGroups(tournament: InternationalTournament, rng: Rng): void {
   const regions = shuffle(rng, ['americas', 'emea', 'pacific', 'china'] as RegionId[]);
   // Latin square: group g gets region r's team with regional seed (g+r)%4+1
   const groups: string[][] = [[], [], [], []];
@@ -602,7 +602,7 @@ export function initChampionsGroups(tournament: InternationalTournament, rng: Se
 export function simChampionsGroups(
   tournament: InternationalTournament,
   state: GameState,
-  rng: SeededRng,
+  rng: Rng,
 ): void {
   const bracket = tournament.playInBracket;
   if (!bracket) return;
@@ -633,7 +633,7 @@ export function getGroupAdvancers(tournament: InternationalTournament): [string,
 
 export function buildChampionsPlayoffBracket(
   tournament: InternationalTournament,
-  rng: SeededRng,
+  rng: Rng,
 ): void {
   const advancers = getGroupAdvancers(tournament);
   if (advancers.length !== 4) return;
@@ -690,7 +690,7 @@ function finalizeTournament(
   tournament.mvpPlayerId = pickTournamentMvp(tournament, state);
 }
 
-function simMatchIds(ids: string[], bracket: PlayoffBracket, state: GameState, rng: SeededRng, tournament?: InternationalTournament, weight?: number): void {
+function simMatchIds(ids: string[], bracket: PlayoffBracket, state: GameState, rng: Rng, tournament?: InternationalTournament, weight?: number): void {
   for (const id of ids) {
     const m = bracket.matches.find(x => x.id === id);
     if (m) simTournamentMatch(m, bracket, state, rng, tournament, weight);
@@ -703,7 +703,7 @@ function simMatchIds(ids: string[], bracket: PlayoffBracket, state: GameState, r
 export function simMastersRound(
   tournament: InternationalTournament,
   state: GameState,
-  rng: SeededRng,
+  rng: Rng,
   round: number,
 ): void {
   if (round === 1) {
@@ -752,7 +752,7 @@ export const MASTERS_ROUNDS = 10;
 export function simChampionsRound(
   tournament: InternationalTournament,
   state: GameState,
-  rng: SeededRng,
+  rng: Rng,
   round: number,
 ): void {
   if (round === 1) {

@@ -5,18 +5,18 @@ import {
   AGE_RANGES, QUALITY_RANGES, SALARY_RANGES, OFF_ROLE_BASE,
   ROLE_AGENTS, ARCHETYPE_WEIGHTS,
 } from '../types';
-import type { SeededRng } from './rng';
+import type { Rng } from './rng';
 import { randInt, randFloat, randChoice, weightedChoice, clamp } from './rng';
 import { generateNationality, generateNationalityForRegion, generateName, generateAlias } from './names';
 
 const ROLES: PlayerRole[] = ['duelist', 'initiator', 'controller', 'sentinel'];
 
-function generateAge(archetype: PlayerArchetype, rng: SeededRng): number {
+function generateAge(archetype: PlayerArchetype, rng: Rng): number {
   const [min, max] = AGE_RANGES[archetype];
   return randInt(rng, min, max);
 }
 
-function generatePeakAge(archetype: PlayerArchetype, age: number, rng: SeededRng): number {
+function generatePeakAge(archetype: PlayerArchetype, age: number, rng: Rng): number {
   const base = archetype === 'prodigy' ? randInt(rng, 21, 24)
     : archetype === 'star' ? randInt(rng, 22, 26)
     : archetype === 'veteran' ? age - randInt(rng, 0, 3)
@@ -26,7 +26,7 @@ function generatePeakAge(archetype: PlayerArchetype, age: number, rng: SeededRng
 }
 
 function generateCoreRatings(
-  archetype: PlayerArchetype, age: number, peakAge: number, rng: SeededRng
+  archetype: PlayerArchetype, age: number, peakAge: number, rng: Rng
 ): { trueAim: number; trueGameSense: number; potential: number } {
   const { min, max } = QUALITY_RANGES[archetype];
   let base = randFloat(rng, min, max);
@@ -63,7 +63,7 @@ function generateRoleRatings(
   primaryRole: PlayerRole,
   archetype: PlayerArchetype,
   trueGameSense: number,
-  rng: SeededRng
+  rng: Rng
 ): PlayerRoleRatingRecord[] {
   const offBase = OFF_ROLE_BASE[archetype];
   return ROLES.map(role => {
@@ -87,7 +87,7 @@ function generateRoleRatings(
   });
 }
 
-function generateAdaptability(archetype: PlayerArchetype, rng: SeededRng): number {
+function generateAdaptability(archetype: PlayerArchetype, rng: Rng): number {
   const bases: Record<PlayerArchetype, [number, number]> = {
     prodigy:    [40, 70],
     star:       [35, 65],
@@ -99,7 +99,7 @@ function generateAdaptability(archetype: PlayerArchetype, rng: SeededRng): numbe
   return Math.round(randFloat(rng, lo, hi));
 }
 
-function generateClutch(archetype: PlayerArchetype, rng: SeededRng): number {
+function generateClutch(archetype: PlayerArchetype, rng: Rng): number {
   const bases: Record<PlayerArchetype, [number, number]> = {
     prodigy:    [30, 65],
     star:       [60, 90],
@@ -111,21 +111,21 @@ function generateClutch(archetype: PlayerArchetype, rng: SeededRng): number {
   return Math.round(randFloat(rng, lo, hi));
 }
 
-function generateCommunication(archetype: PlayerArchetype, age: number, rng: SeededRng): number {
+function generateCommunication(archetype: PlayerArchetype, age: number, rng: Rng): number {
   const base = 40 + age * 0.8;
   const noise = randFloat(rng, -15, 15);
   const bonus = archetype === 'veteran' ? 15 : archetype === 'journeyman' ? 5 : 0;
   return clamp(Math.round(base + noise + bonus), 20, 100);
 }
 
-function generateSalary(archetype: PlayerArchetype, rng: SeededRng): number {
+function generateSalary(archetype: PlayerArchetype, rng: Rng): number {
   const [lo, hi] = SALARY_RANGES[archetype];
   const raw = randFloat(rng, lo, hi);
   // Round to nearest 5k
   return Math.round(raw / 5_000) * 5_000;
 }
 
-export function pickArchetype(rng: SeededRng): PlayerArchetype {
+export function pickArchetype(rng: Rng): PlayerArchetype {
   const archetypes = Object.keys(ARCHETYPE_WEIGHTS) as PlayerArchetype[];
   const weights = archetypes.map(a => ARCHETYPE_WEIGHTS[a]);
   return weightedChoice(rng, archetypes, weights);
@@ -140,7 +140,7 @@ export function generatePlayer(
   id: string,
   primaryRole: PlayerRole,
   archetype: PlayerArchetype,
-  rng: SeededRng,
+  rng: Rng,
   regionId?: RegionId
 ): GeneratedPlayer {
   const pool = regionId ? generateNationalityForRegion(rng, regionId) : generateNationality(rng);
@@ -184,7 +184,7 @@ export function generatePlayer(
 
 export function generatePlayerPool(
   totalPlayers: number,
-  rng: SeededRng,
+  rng: Rng,
   startIndex = 0,
   regionId?: RegionId
 ): GeneratedPlayer[] {
@@ -216,7 +216,7 @@ export function scoutRoleRating(
   scoutQuality: number,
   playerPrimaryRole: PlayerRole,
   roleBeingScouted: PlayerRole,
-  rng: SeededRng
+  rng: Rng
 ): PlayerRoleRatingRecord {
   const roleFactor = roleBeingScouted === playerPrimaryRole ? 1.0 : 0.4;
   const gain = (scoutQuality / 100) * (1 - rr.scoutConfidence / 100) * 20 * roleFactor;

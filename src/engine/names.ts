@@ -1,6 +1,6 @@
 import type { RegionId } from '../types';
 import { weightedChoice, randChoice } from './rng';
-import type { SeededRng } from './rng';
+import type { Rng } from './rng';
 
 export interface NationalityPool {
   nationality: string;
@@ -125,7 +125,7 @@ const ALIAS_PREFIXES = [
   'warp', 'wave', 'wire', 'wolf', 'wrath', 'xero', 'yolo', 'zero', 'zinc',
 ];
 
-export function generateNationality(rng: SeededRng): NationalityPool {
+export function generateNationality(rng: Rng): NationalityPool {
   return weightedChoice(
     rng,
     NATIONALITY_POOLS,
@@ -133,7 +133,7 @@ export function generateNationality(rng: SeededRng): NationalityPool {
   );
 }
 
-export function generateNationalityForRegion(rng: SeededRng, regionId: RegionId): NationalityPool {
+export function generateNationalityForRegion(rng: Rng, regionId: RegionId): NationalityPool {
   // 85% home-region player, 15% import
   if (rng() < 0.85) {
     const homePools = NATIONALITY_POOLS.filter(p => p.region === regionId);
@@ -144,14 +144,14 @@ export function generateNationalityForRegion(rng: SeededRng, regionId: RegionId)
   return generateNationality(rng);
 }
 
-export function generateName(pool: NationalityPool, rng: SeededRng): { firstName: string; lastName: string } {
+export function generateName(pool: NationalityPool, rng: Rng): { firstName: string; lastName: string } {
   return {
     firstName: randChoice(rng, pool.firstNames),
     lastName: randChoice(rng, pool.lastNames),
   };
 }
 
-export function generateAlias(firstName: string, nationality: string, rng: SeededRng): string {
+export function generateAlias(firstName: string, nationality: string, rng: Rng): string {
   const r = rng();
   if (r < 0.35) {
     // Based on first name (truncated / stylised)

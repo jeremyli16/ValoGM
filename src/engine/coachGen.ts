@@ -1,9 +1,9 @@
 import type { Coach, RegionId } from '../types';
-import type { SeededRng } from './rng';
+import type { Rng } from './rng';
 import { randInt, clamp } from './rng';
 import { generateNationalityForRegion, generateName } from './names';
 
-export function generateCoach(id: string, rng: SeededRng, regionId: RegionId): Coach {
+export function generateCoach(id: string, rng: Rng, regionId: RegionId): Coach {
   const pool = generateNationalityForRegion(rng, regionId);
   const { firstName, lastName } = generateName(pool, rng);
 
@@ -40,6 +40,6 @@ export function generateCoach(id: string, rng: SeededRng, regionId: RegionId): C
   };
 }
 
-export function generateCoachPool(count: number, rng: SeededRng, regionId: RegionId): Coach[] {
+export function generateCoachPool(count: number, rng: Rng, regionId: RegionId): Coach[] {
   return Array.from({ length: count }, (_, i) => generateCoach(`co_${regionId}_${i}`, rng, regionId));
 }

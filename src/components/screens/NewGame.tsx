@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { RegionId } from '../../types';
 
 interface Props {
-  onStart: (regionId: RegionId, teamIndex: number, seed: number) => void;
+  onStart: (regionId: RegionId, teamIndex: number) => void;
 }
 
 const REGIONS: { id: RegionId; label: string; teams: string[] }[] = [
@@ -35,7 +35,6 @@ const REGIONS: { id: RegionId; label: string; teams: string[] }[] = [
 export function NewGame({ onStart }: Props) {
   const [region, setRegion] = useState<RegionId>('americas');
   const [teamIndex, setTeamIndex] = useState(0);
-  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 999999) + 1);
 
   const selectedRegion = REGIONS.find(r => r.id === region)!;
 
@@ -80,29 +79,10 @@ export function NewGame({ onStart }: Props) {
           </div>
         </div>
 
-        <div className="card p-4" style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 14, marginBottom: 12, color: 'var(--text-secondary)' }}>SEED</h2>
-          <div className="flex gap-2 items-center">
-            <input
-              type="number"
-              value={seed}
-              onChange={e => setSeed(Number(e.target.value) || 1)}
-              style={{
-                background: 'var(--bg-3)', border: '1px solid var(--border)',
-                color: 'var(--text-primary)', fontFamily: 'var(--font-mono)',
-                padding: '6px 10px', width: 140,
-              }}
-            />
-            <button className="btn" onClick={() => setSeed(Math.floor(Math.random() * 999999) + 1)}>
-              Randomize
-            </button>
-          </div>
-        </div>
-
         <button
           className="btn btn-red"
           style={{ fontSize: 14, padding: '10px 28px' }}
-          onClick={() => onStart(region, teamIndex, seed)}
+          onClick={() => onStart(region, teamIndex)}
         >
           Start Game
         </button>

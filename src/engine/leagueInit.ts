@@ -6,7 +6,7 @@ import {
   LEAGUE_NAMES, LEAGUE_FORMATS, HOME_NATIONALITIES, IMPORT_LIMITS,
   MAP_POOL,
 } from '../types';
-import type { SeededRng } from './rng';
+import type { Rng } from './rng';
 import { randInt, randFloat, randChoice, weightedChoice, shuffle, clamp } from './rng';
 import { generatePlayerPool } from './playerGen';
 import { generateCoachPool } from './coachGen';
@@ -79,7 +79,7 @@ function generateOrg(
   region: RegionId,
   prestige: number,
   teamId: string,
-  rng: SeededRng
+  rng: Rng
 ): Organization {
   return {
     id,
@@ -104,7 +104,7 @@ function generateTeam(
   name: string,
   leagueId: string,
   region: RegionId,
-  rng: SeededRng
+  rng: Rng
 ): Team {
   const mapPool: Record<string, number> = {};
   MAP_POOL.forEach(m => { mapPool[m] = randInt(rng, 30, 90); });
@@ -139,7 +139,7 @@ function assignRoster(
   players: Player[],
   contracts: Map<string, Contract>,
   season: number,
-  rng: SeededRng
+  rng: Rng
 ): void {
   const { maxImports } = IMPORT_LIMITS[team.region];
   const doubleRole = weightedChoice(rng,
@@ -208,7 +208,7 @@ function assignRoster(
 // ─── Map Pool ─────────────────────────────────────────────────────────────────
 
 // Pick the 7 active maps for a new game from the full MAP_POOL universe.
-export function pickInitialMapPool(rng: SeededRng): string[] {
+export function pickInitialMapPool(rng: Rng): string[] {
   return shuffle(rng, [...MAP_POOL]).slice(0, 7);
 }
 
@@ -217,7 +217,7 @@ export function pickInitialMapPool(rng: SeededRng): string[] {
 export function generateSchedule(
   league: League,
   season: number,
-  rng: SeededRng
+  rng: Rng
 ): ScheduledMatch[] {
   const matches: ScheduledMatch[] = [];
   const { groups, format } = league;
@@ -391,7 +391,7 @@ export interface LeagueInitResult {
   matches: ScheduledMatch[];
 }
 
-export function initLeague(regionId: RegionId, seed: number, rng: SeededRng): LeagueInitResult {
+export function initLeague(regionId: RegionId, rng: Rng): LeagueInitResult {
   const orgNames = ORG_NAMES[regionId];
   const partnershipFormat = LEAGUE_FORMATS.partnership;
   const challengersFormat = LEAGUE_FORMATS.challengers;
