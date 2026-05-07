@@ -9,7 +9,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **Frontend:** React + TypeScript (Vite)
 - **Styling:** Global CSS with custom design tokens (no component library)
 - **Persistence:** IndexedDB (offline, browser-local saves)
-- **Simulation:** Seeded RNG — deterministic, reproducible games from a seed
+- **Simulation:** `Math.random`-based RNG — each new game generates a fresh random world
 
 ---
 
@@ -20,7 +20,6 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 **New Game**
 - Region selection (Americas, EMEA, Pacific, China)
 - Team selection from 12 franchise organizations per region
-- Seed input with randomize button
 
 **Dashboard**
 - Win/loss record, standings position, points
@@ -120,8 +119,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **Pistol bonus-round economy:** team that loses the pistol round (rounds 1 / 13) is forced to eco on round 2 / 14, saving full budget for a guaranteed full buy on round 3 / 15 — matches the real Valorant pistol → eco → bonus-round cadence
 - Player combat power: Aim (55%) + Game Sense (30%) + Clutch (15%), modified by role rating, equipment tier, side (attack/defense), and morale
 - Role side modifiers: Duelists strong on attack, Sentinels on defense, Controllers on defense, Initiators balanced
-- **Role-differentiated kill and death rates:** Duelists entry-frag (kill weight ×1.30, survival weight ×0.80); Sentinels hold safe angles (survival ×1.25); Initiators and Controllers support (survival ×1.10 / ×1.00, kill weight ×0.90 / ×0.80) — produces realistic per-role stat profiles
-- Team synergy bonus (+6%) when all 4 roles are present
+- **Role-differentiated kill, death, and assist rates:** kill weight — Duelist ×1.25, Initiator ×0.95, Controller ×0.85, Sentinel ×0.95; assist probability weighted by role — Controller ×1.60, Initiator ×1.30, Sentinel ×0.85, Duelist ×0.55; produces realistic per-role stat profiles where Controllers and Initiators accrue high APR despite lower KPR
+- **Team synergy bonus (+6%)** when all 4 roles are present
+- **Team chemistry modifier:** average pairwise chemistry among the 5 starters scales team combat power by ×(1 + chemistry/1000) — range ×1.0 (strangers) to ×1.10 (long-established lineup); applied on top of the synergy bonus
 - **Map-specific attack/defense bias** sourced from VLR.gg pro-play data: Split −0.03, Pearl −0.02, Bind +0.01, Haven +0.02, Fracture +0.02, Abyss +0.02, Ascent +0.03; bias shifts the per-round win probability of each round played on that map
 - **Clutch mechanic:** when one player faces two or more opponents mid-round, a separate clutch check fires — 1v2 ≈ 28%, 1v3 ≈ 12%, 1v4 ≈ 5%, 1v5 ≈ 2% base rate (sourced from VLR.gg), scaled by the clutch player's Clutch stat (×0.7–1.3); success credits the clutch player with all remaining kills; failure on a non-match-point round results in a weapon save (player escapes)
 - **Weapon saves:** losing-side survivor who fails a clutch check saves their rifle for the next round (does not die, no kill credited), unless it is match point — on match point all players fight to the death
@@ -132,7 +132,7 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - **VLR Rating 2.0 (ML-derived):** rating formula uses feature importances from a machine-learning model fit against real VLR.gg rating data — `KPR×0.6332 + DPR×0.2179 + KAST×0.0862 + FDPR×0.0281 + APR×0.0182 + ADRa×0.0136 + FKPR×0.0027`, clamped to [0, 3]; KAST/FDPR/FKPR approximated from available stats with matched baselines so their contribution is proportional to deviation from the pro average
 - **Real map veto:** bo1 = alternating bans until 1 map remains; bo3 = A ban → B ban → A pick → B pick → A ban → B ban → decider; bo5 = 2 bans then alternating picks + decider; teams ban the opponent's strongest map and pick their own strongest map
 - **12-map universe with 7-map active rotation:** full pool is Ascent, Bind, Haven, Split, Fracture, Pearl, Lotus, Sunset, Abyss, Icebox, Breeze, Corrode; only 7 are active at any time (`GameState.activeMapPool`); veto and match simulation use the active pool only
-- **Per-split map rotation:** at each new split, the pool may rotate — 60% chance no change, 30% chance 1 map swaps out, 10% chance 2 maps swap out; incoming maps are drawn from the reserve; a "Map Pool Update" notification names what was added and removed; seeded per-game so rotation history is deterministic and reproducible
+- **Per-split map rotation:** at each new split, the pool may rotate — 60% chance no change, 30% chance 1 map swaps out, 10% chance 2 maps swap out; incoming maps are drawn from the reserve; a "Map Pool Update" notification names what was added and removed; rotated-out maps have their practice allocation cleared automatically so the player's budget is never consumed by inactive maps
 - Per-match stats (K/D/A, ACS, ADR, Rating, maps played, isPlayoff) written to IndexedDB after each simulated match — both regular season and playoff matches
 - **Coach tactics bonus:** head coach's Tactics rating boosts each player's effective Game Sense (×1+t/500) and Clutch (×1+t/750); assistant contributes at 50% weight
 
@@ -147,10 +147,10 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 - Weekly morale tick: win/loss deltas scaled by coach's Morale Boost rating (higher boost amplifies wins, cushions losses), decay toward baseline
 - Season-end development pass applied during offseason transition
 - **Passive scouting tick:** each week, the coach's effective Scouting rating raises role-rating confidence for all players on the squad (up to ~1.5 pts/week at max combined rating)
+- **Pairwise chemistry growth:** every week all roster pairs (starters + bench) on each team gain +0.5 chemistry (cap 100); new players start at 0 with existing teammates, naturally pulling the team average down; pairs persist on the team — a returning player resumes from their prior value rather than resetting; team match chemistry = average of all 10 starter-pair values
 
 **League Initialization**
 - All 4 regions (Americas, EMEA, Pacific, China) fully initialized at game start — 12 partnership teams + 8 challengers teams per region (48 partnership + 32 challengers teams total)
-- Each region uses a distinct derived seed so results are deterministic but independent across regions
 - Prestige-ordered roster draft from a shared player pool per region; bench roster is optional (teams may start with zero substitutes)
 - Import rules enforced at draft (max 1 non-home-region starter per team)
 - **Round-robin schedule:** polygon-rotation algorithm guarantees every team plays exactly once per week across 5 regular-season weeks (3 matches per group per week, 6 total); no team sits out any week; generated for all 4 regions each split
@@ -158,7 +158,9 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 
 **Game Phases**
 - `new_game → preseason → regular_season → playoffs → offseason → regular_season → ...`
-- Each week advance simulates that week's matches, updates standings, ticks morale, and checks for phase transitions
+- Each week advance simulates that week's matches, updates standings, ticks morale, grows pair chemistry for all teams, and checks for phase transitions
+- **Intersplit offseason (between splits 1→2 and 2→3):** lasts exactly 1 week — no contract renewals, no transfer window, no free agency; only weekly player and chemistry ticks fire
+- **End-of-season offseason (after split 3):** full 4-week window — transfer window opens, expiring contracts are flagged, renewal offers resolved, free agency active
 - **Background region simulation:** all 3 non-player regions run their regular-season matches each week alongside the player's league; when the player's league enters playoffs, the other 3 regions' full playoff brackets are auto-simulated in one shot (results stored in `otherPlayoffBrackets`); new schedules are generated for all 4 regions each offseason transition
 
 **Coaching Staff**
@@ -198,8 +200,8 @@ A Valorant team management simulator. Build a franchise in one of four regional 
 ### Map Pool Editing
 ~~Implemented.~~ Player team uses explicit per-map practice allocation (UI sliders, `PRACTICE_BUDGET = 5` pts/week); active maps with pts > 0 gain score via diminishing returns, unallocated active maps decay 0.5/week. AI teams receive seeded random drift each regular-season week — active maps trend toward 60 with noise, reserve maps decay 0.3/week. Scores feed into match simulation aim/game-sense multiplier and ban/pick decisions.
 
-### Chemistry
-`Team.chemistry` is tracked but never read. No mechanic increases or decreases it (e.g., playing together, transfers, losing streaks), and it has no influence on match simulation.
+### Chemistry Display
+Pairwise chemistry is fully simulated and affects match outcomes, but there is no UI surface for it — the player cannot see individual pair values, team chemistry average, or how a potential signing would change the team's chemistry score.
 
 ### Injuries
 The `Player` type has no injury or availability field. All players are always available. No injury events are generated by the match simulation.
