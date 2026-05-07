@@ -628,7 +628,7 @@ function checkPhaseTransition(state: GameState): GameState {
         read: false,
       });
     }
-  } else if (state.phase === 'offseason' && state.week > 4) {
+  } else if (state.phase === 'offseason' && state.week > (state.season % 3 === 0 ? 4 : 1)) {
     // New season
     state.season++;
     state.act = 1;
@@ -1629,20 +1629,23 @@ export function advanceWeek(state: GameState): GameState {
   }
 
   if (state.phase === 'offseason') {
-    if (state.week === 1) {
-      state = detectExpiringContracts(state);
-      state.notifications.push({
-        id: notifId(),
-        type: 'playoff',
-        title: 'Transfer Window Open',
-        body: 'Free agency is active — 4 weeks to sign players and make transfers.',
-        week: state.week,
-        read: false,
-      });
+    const isEndOfSeason = state.season % 3 === 0;
+    if (isEndOfSeason) {
+      if (state.week === 1) {
+        state = detectExpiringContracts(state);
+        state.notifications.push({
+          id: notifId(),
+          type: 'playoff',
+          title: 'Transfer Window Open',
+          body: 'Free agency is active — 4 weeks to sign players and make transfers.',
+          week: state.week,
+          read: false,
+        });
+      }
+      if (state.week === 2) state = warnUnresolvedRenewals(state);
+      if (state.week >= 3) state = resolveExpiredRenewals(state);
+      state = processRenewalOffers(state);
     }
-    if (state.week === 2) state = warnUnresolvedRenewals(state);
-    if (state.week >= 3) state = resolveExpiredRenewals(state);
-    state = processRenewalOffers(state);
     state.week++;
     state = weeklyPlayerTick(state);
     state = checkPhaseTransition(state);
