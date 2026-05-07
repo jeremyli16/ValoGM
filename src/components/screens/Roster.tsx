@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { GameState, Player, PlayerRoleRatingRecord, Coach } from '../../types';
+import type { GameState, Player, PlayerRoleRatingRecord, Coach, Team } from '../../types';
 import { playerMatchStatsRepo } from '../../db/repos';
 import { RoleBadge } from '../shared/RoleBadge';
 import { StatBar } from '../shared/StatBar';
@@ -19,6 +19,17 @@ const ROLE_COLORS: Record<string, string> = {
 
 function overallRating(p: Player): number {
   return Math.round(p.aim * 0.40 + p.gameSense * 0.35 + p.clutch * 0.15 + p.communication * 0.10);
+}
+
+function computeTeamChemistry(team: Team, starterIds: string[]): number {
+  const pairs: number[] = [];
+  for (let i = 0; i < starterIds.length; i++) {
+    for (let j = i + 1; j < starterIds.length; j++) {
+      const key = [starterIds[i], starterIds[j]].sort().join(':');
+      pairs.push(team.pairChemistry[key] ?? 0);
+    }
+  }
+  return pairs.length > 0 ? Math.round(pairs.reduce((a, b) => a + b, 0) / pairs.length) : 0;
 }
 
 interface SeasonAvg {
@@ -370,6 +381,19 @@ export function Roster({ state, onMovePlayer, onReleasePlayer }: Props) {
       <div className="flex-col" style={{ flex: 1, padding: 16, overflow: 'hidden' }}>
         <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
           <h2 className="font-head" style={{ fontSize: 18 }}>{team?.name ?? 'Roster'}</h2>
+          {team && (() => {
+            const chem = computeTeamChemistry(team, team.rosterIds);
+            const color = chem >= 60 ? 'var(--teal)' : chem >= 30 ? 'var(--amber)' : 'var(--red)';
+            return (
+              <div className="flex items-center gap-2">
+                <span className="text-dim font-head" style={{ fontSize: 10, letterSpacing: '0.08em' }}>CHEMISTRY</span>
+                <div style={{ width: 64, height: 5, background: 'var(--bg-2)', borderRadius: 3 }}>
+                  <div style={{ height: '100%', width: `${chem}%`, background: color, borderRadius: 3 }} />
+                </div>
+                <span className="font-mono" style={{ fontSize: 12, color }}>{chem}</span>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="tabs" style={{ marginBottom: 12 }}>
