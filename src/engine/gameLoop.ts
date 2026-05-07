@@ -109,6 +109,15 @@ function rotateMapPool(state: GameState): GameState {
   }
 
   state.activeMapPool = current;
+
+  // Clear practice allocation for removed maps so points are freed for the player.
+  const playerTeam = state.teams.get(state.playerTeamId);
+  if (playerTeam?.practiceAllocation) {
+    const cleaned = { ...playerTeam.practiceAllocation };
+    removed.forEach(m => { delete cleaned[m]; });
+    state.teams.set(state.playerTeamId, { ...playerTeam, practiceAllocation: cleaned });
+  }
+
   state.notifications.push({
     id: notifId(),
     type: 'development',

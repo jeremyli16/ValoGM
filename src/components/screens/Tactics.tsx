@@ -26,7 +26,7 @@ function MapPoolPanel({ state, onSet }: {
   const active = state.activeMapPool;
   const reserve = MAP_POOL.filter(m => !active.includes(m));
 
-  const totalAllocated = Object.values(allocation).reduce((a, b) => a + b, 0);
+  const totalAllocated = active.reduce((sum, m) => sum + (allocation[m] ?? 0), 0);
 
   function adjust(mapName: string, delta: number) {
     const current = allocation[mapName] ?? 0;
