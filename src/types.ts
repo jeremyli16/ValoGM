@@ -105,7 +105,7 @@ export interface Team {
   mapComps?: Record<string, string[]>;
   practiceAllocation?: Record<string, number>;
   morale: number;
-  chemistry: number;
+  pairChemistry: Record<string, number>;
   wins: number;
   losses: number;
   roundDiff: number;

@@ -357,12 +357,27 @@ function weeklyCoachScoutingTick(state: GameState): GameState {
   return state;
 }
 
+function growPairChemistry(team: Team): Team {
+  const all = [...team.rosterIds, ...team.subIds];
+  const updated = { ...team.pairChemistry };
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const key = [all[i], all[j]].sort().join(':');
+      updated[key] = Math.min(100, (updated[key] ?? 0) + 0.5);
+    }
+  }
+  return { ...team, pairChemistry: updated };
+}
+
 function weeklyPlayerTick(state: GameState): GameState {
   state.players.forEach((player, id) => {
     const developed = developPlayer(player);
     const moraleUpdated = updateMorale(developed);
     state.players.set(id, moraleUpdated);
     state.dirtyPlayers.add(id);
+  });
+  state.teams.forEach((team, id) => {
+    state.teams.set(id, growPairChemistry(team));
   });
   return weeklyCoachScoutingTick(state);
 }

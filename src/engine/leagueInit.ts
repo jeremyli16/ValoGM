@@ -120,7 +120,7 @@ function generateTeam(
     assistantCoachId: null,
     mapPool,
     morale: 75,
-    chemistry: 65,
+    pairChemistry: {},
     wins: 0,
     losses: 0,
     roundDiff: 0,

@@ -55,15 +55,27 @@ function playerCombatPower(p: PlayerState, buy: BuyType, side: 'attack' | 'defen
   return base * roleMultiplier * equipMod * sideMod * moraleMod * p.agentMetaMod * p.agentFitMod + p.agentMapDelta;
 }
 
+function computeStarterChemistry(pairChemistry: Record<string, number>, starters: PlayerState[]): number {
+  const pairs: number[] = [];
+  for (let i = 0; i < starters.length; i++) {
+    for (let j = i + 1; j < starters.length; j++) {
+      const key = [starters[i].id, starters[j].id].sort().join(':');
+      pairs.push(pairChemistry[key] ?? 0);
+    }
+  }
+  return pairs.length > 0 ? pairs.reduce((a, b) => a + b, 0) / pairs.length : 0;
+}
+
 function teamCombatPower(
   players: PlayerState[],
   buys: BuyType[],
-  side: 'attack' | 'defense'
+  side: 'attack' | 'defense',
+  chemMod: number
 ): number {
   const roles = new Set(players.map(p => p.assignedRole));
   const synergyBonus = roles.size === 4 ? 1.06 : 1.0;
   const total = players.reduce((sum, p, i) => sum + playerCombatPower(p, buys[i], side), 0);
-  return total * synergyBonus;
+  return total * synergyBonus * chemMod;
 }
 
 // ─── Economy ─────────────────────────────────────────────────────────────────
@@ -337,15 +349,17 @@ function simRound(
   prevDefBuy: BuyType | null,
   mapBias: number,
   isMatchPoint: boolean,
-  rng: Rng
+  rng: Rng,
+  atkChemMod: number,
+  defChemMod: number,
 ): RoundSimResult {
   const { teamBuyType: atkBuyType, individualBuys: atkBuys } =
     decideTeamBuy(atkEcon, atkLossStreak, roundNum, prevDefBuy);
   const { teamBuyType: defBuyType, individualBuys: defBuys } =
     decideTeamBuy(defEcon, defLossStreak, roundNum, prevAtkBuy);
 
-  const atkPower = teamCombatPower(attackers, atkBuys, 'attack');
-  const defPower = teamCombatPower(defenders, defBuys, 'defense');
+  const atkPower = teamCombatPower(attackers, atkBuys, 'attack', atkChemMod);
+  const defPower = teamCombatPower(defenders, defBuys, 'defense', defChemMod);
 
   const plantChance = (atkPower / (atkPower + defPower)) * 1.04;
   const planted = rng() < plantChance;
@@ -380,7 +394,9 @@ function simOvertimeRounds(
   teamBPlayers: PlayerState[],
   lastAttackSide: 'A' | 'B',
   mapBias: number,
-  rng: Rng
+  rng: Rng,
+  chemModA: number,
+  chemModB: number,
 ): { otA: number; otB: number; rounds: RoundResultSummary[] } {
   // Team that was defending at end of regulation attacks first in OT.
   let otAttackSide: 'A' | 'B' = lastAttackSide === 'A' ? 'B' : 'A';
@@ -394,7 +410,9 @@ function simOvertimeRounds(
     for (let r = 0; r < 2; r++) {
       const atk = otAttackSide === 'A' ? teamAPlayers : teamBPlayers;
       const def = otAttackSide === 'A' ? teamBPlayers : teamAPlayers;
-      const result = simRound(atk, def, freshEcon(), freshEcon(), 0, 0, 99, null, null, mapBias, true, rng);
+      const atkChem = otAttackSide === 'A' ? chemModA : chemModB;
+      const defChem = otAttackSide === 'A' ? chemModB : chemModA;
+      const result = simRound(atk, def, freshEcon(), freshEcon(), 0, 0, 99, null, null, mapBias, true, rng, atkChem, defChem);
       const aWon = (otAttackSide === 'A') === (result.winner === 'attack');
       if (aWon) otA++; else otB++;
       rounds.push({
@@ -525,6 +543,9 @@ function simMap(
     };
   });
 
+  const chemModA = 1 + computeStarterChemistry(teamA.pairChemistry, localA) / 1000;
+  const chemModB = 1 + computeStarterChemistry(teamB.pairChemistry, localB) / 1000;
+
   const econA: PlayerEconomy[] = localA.map(s => ({ playerId: s.id, credits: 800 }));
   const econB: PlayerEconomy[] = localB.map(s => ({ playerId: s.id, credits: 800 }));
 
@@ -547,10 +568,12 @@ function simMap(
     const defStreak = attackSide === 'A' ? lossStreakB : lossStreakA;
     const isMatchPoint = scoreA === 12 || scoreB === 12;
 
+    const atkChem = attackSide === 'A' ? chemModA : chemModB;
+    const defChem = attackSide === 'A' ? chemModB : chemModA;
     const result = simRound(
       atk, def, atkEcon, defEcon,
       atkStreak, defStreak, round,
-      prevAtkBuy, prevDefBuy, mapBias, isMatchPoint, rng
+      prevAtkBuy, prevDefBuy, mapBias, isMatchPoint, rng, atkChem, defChem
     );
 
     prevAtkBuy = result.atkBuyType;
@@ -600,7 +623,7 @@ function simMap(
   }
 
   if (scoreA === 12 && scoreB === 12) {
-    const { otA, otB, rounds: otRounds } = simOvertimeRounds(localA, localB, attackSide, mapBias, rng);
+    const { otA, otB, rounds: otRounds } = simOvertimeRounds(localA, localB, attackSide, mapBias, rng, chemModA, chemModB);
     scoreA += otA;
     scoreB += otB;
     roundResults.push(...otRounds);
