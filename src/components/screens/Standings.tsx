@@ -140,7 +140,7 @@ export function Standings({ state }: Props) {
 
   const activeRegion = activeTab !== 'champions' ? activeTab : state.regionId;
   const league = activeTab !== 'champions'
-    ? Array.from(state.leagues.values()).find(l => l.region === activeTab)
+    ? Array.from(state.leagues.values()).find(l => l.region === activeTab && l.tier === 'partnership')
     : null;
 
   const groupAIds = league?.groups?.groupA ?? [];
@@ -216,7 +216,7 @@ export function Standings({ state }: Props) {
         ) : (
           <>
             <h2 className="font-head" style={{ fontSize: 18, color: accentColor }}>
-              {REGION_LABEL[activeRegion]} — Season {state.season}
+              {REGION_LABEL[activeRegion]} — Split {((state.season - 1) % 3) + 1}
             </h2>
             {league ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
