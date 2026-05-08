@@ -1,10 +1,11 @@
 import type {
   Player, Team, Organization, League, Contract, StandingsRow,
   ScheduledMatch, PlayerRoleRatingRecord, RegionId, PlayerRole, Coach,
+  GameState, PlayoffBracket, PlayoffMatch, SplitRecord, SeasonRecord,
 } from '../types';
 import {
   LEAGUE_NAMES, LEAGUE_FORMATS, HOME_NATIONALITIES, IMPORT_LIMITS,
-  MAP_POOL,
+  MAP_POOL, AGENT_MAP_AFFINITY,
 } from '../types';
 import type { Rng } from './rng';
 import { randInt, randFloat, randChoice, weightedChoice, shuffle, clamp } from './rng';
@@ -331,7 +332,6 @@ export function updateStandingsAfterMatch(
 
 // ─── Playoffs ─────────────────────────────────────────────────────────────────
 
-import type { PlayoffBracket, PlayoffMatch } from '../types';
 import { GRAND_FINAL_FATIGUE_BASE, FATIGUE_PER_EXTRA_MAP } from '../types';
 
 export function buildPlayoffBracket(
@@ -557,5 +557,112 @@ export function initLeague(regionId: RegionId, rng: Rng): LeagueInitResult {
     challengers,
     standings,
     matches,
+  };
+}
+
+// ─── Agent Map Meta ───────────────────────────────────────────────────────────
+
+export function buildInitialAgentMapMeta(
+  agentMeta: Record<string, number>,
+  mapPool: string[],
+  rng: () => number
+): Record<string, Record<string, number>> {
+  const meta: Record<string, Record<string, number>> = {};
+  for (const agent of Object.keys(agentMeta)) {
+    meta[agent] = {};
+    for (const mapName of mapPool) {
+      const base = AGENT_MAP_AFFINITY[agent]?.[mapName] ?? 0;
+      meta[agent][mapName] = clamp(base + randFloat(rng, -0.02, 0.02), -0.15, 0.15);
+    }
+  }
+  return meta;
+}
+
+// ─── League history builders ──────────────────────────────────────────────────
+
+export function aggregatePlayerRatings(
+  regularMatches: ScheduledMatch[],
+  playoffMatches: PlayoffMatch[],
+): Map<string, { total: number; games: number }> {
+  const totals = new Map<string, { total: number; games: number }>();
+  for (const m of regularMatches) {
+    if (!m.result) continue;
+    for (const ps of m.result.playerStats) {
+      const curr = totals.get(ps.playerId) ?? { total: 0, games: 0 };
+      totals.set(ps.playerId, { total: curr.total + ps.rating, games: curr.games + 1 });
+    }
+  }
+  for (const m of playoffMatches) {
+    if (!m.result) continue;
+    for (const ps of m.result.playerStats) {
+      const curr = totals.get(ps.playerId) ?? { total: 0, games: 0 };
+      totals.set(ps.playerId, { total: curr.total + ps.rating, games: curr.games + 1 });
+    }
+  }
+  return totals;
+}
+
+export function buildSplitRecord(state: GameState, gameSeason: number): SplitRecord | null {
+  const calendarSeason = Math.ceil(gameSeason / 3);
+  const splitNum = ((gameSeason - 1) % 3) + 1;
+
+  const winnerTeamId = state.playoffBracket?.champion ?? '';
+  const gfMatch = state.playoffBracket?.matches.find(m => m.round === 'GF');
+  const runnerUpTeamId = gfMatch?.result
+    ? (gfMatch.result.winner === 'A' ? gfMatch.teamBId ?? '' : gfMatch.teamAId ?? '')
+    : '';
+
+  const regularMatches = [...state.matches.values()].filter(
+    m => m.leagueId === state.leagueId && m.season === gameSeason && !!m.result,
+  );
+  const playoffMatches = (state.playoffBracket?.matches ?? []).filter(m => m.result !== null);
+  const playerTotals = aggregatePlayerRatings(regularMatches, playoffMatches);
+
+  let mvpPlayerId = '';
+  let bestRating = -Infinity;
+  playerTotals.forEach((v, id) => {
+    const avg = v.total / v.games;
+    if (avg > bestRating) { bestRating = avg; mvpPlayerId = id; }
+  });
+
+  if (!winnerTeamId && !mvpPlayerId) return null;
+  return { calendarSeason, splitNum, winnerTeamId, runnerUpTeamId, mvpPlayerId };
+}
+
+export function buildSeasonRecord(state: GameState, gameSeason: number): SeasonRecord | null {
+  if (gameSeason % 3 !== 0) return null;
+  const calendarSeason = Math.ceil(gameSeason / 3);
+
+  const regularMatches = [...state.matches.values()].filter(
+    m => m.leagueId === state.leagueId && m.season === gameSeason && !!m.result,
+  );
+  const playoffMatches = (state.playoffBracket?.matches ?? []).filter(m => m.result !== null);
+  const playerTotals = aggregatePlayerRatings(regularMatches, playoffMatches);
+  if (playerTotals.size === 0) return null;
+
+  let mvpPlayerId = '';
+  let bestRating = -Infinity;
+  const bestByRole: Record<string, { playerId: string; rating: number }> = {
+    duelist:    { playerId: '', rating: -Infinity },
+    initiator:  { playerId: '', rating: -Infinity },
+    controller: { playerId: '', rating: -Infinity },
+    sentinel:   { playerId: '', rating: -Infinity },
+  };
+
+  playerTotals.forEach((v, playerId) => {
+    const avg = v.total / v.games;
+    if (avg > bestRating) { bestRating = avg; mvpPlayerId = playerId; }
+    const role = state.players.get(playerId)?.primaryRole;
+    if (role && avg > bestByRole[role].rating) bestByRole[role] = { playerId, rating: avg };
+  });
+
+  return {
+    season: calendarSeason,
+    championTeamId: state.playoffBracket?.champion ?? '',
+    mvpPlayerId,
+    bestDuelistId:    bestByRole.duelist.playerId,
+    bestInitiatorId:  bestByRole.initiator.playerId,
+    bestControllerId: bestByRole.controller.playerId,
+    bestSentinelId:   bestByRole.sentinel.playerId,
   };
 }

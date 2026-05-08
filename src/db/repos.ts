@@ -246,7 +246,7 @@ export async function persistGameState(state: GameState): Promise<void> {
     playerTeamId: state.playerTeamId,
     leagueId: state.leagueId,
     regionId: state.regionId,
-    seed: state.seed,
+
     freeAgents: state.freeAgents,
     freeAgentCoaches: state.freeAgentCoaches,
     otherLeagueIds: state.otherLeagueIds,

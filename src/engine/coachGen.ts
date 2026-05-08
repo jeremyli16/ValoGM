@@ -1,4 +1,4 @@
-import type { Coach, RegionId } from '../types';
+import type { Coach, Team, RegionId } from '../types';
 import type { Rng } from './rng';
 import { randInt, clamp } from './rng';
 import { generateNationalityForRegion, generateName } from './names';
@@ -42,4 +42,14 @@ export function generateCoach(id: string, rng: Rng, regionId: RegionId): Coach {
 
 export function generateCoachPool(count: number, rng: Rng, regionId: RegionId): Coach[] {
   return Array.from({ length: count }, (_, i) => generateCoach(`co_${regionId}_${i}`, rng, regionId));
+}
+
+export function effectiveCoachStat(
+  team: Team,
+  coaches: Map<string, Coach>,
+  stat: 'tactics' | 'scouting' | 'moraleBoost'
+): number {
+  const head = team.headCoachId ? coaches.get(team.headCoachId) : null;
+  const asst = team.assistantCoachId ? coaches.get(team.assistantCoachId) : null;
+  return (head?.[stat] ?? 0) + (asst?.[stat] ?? 0) * 0.5;
 }

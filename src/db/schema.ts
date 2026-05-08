@@ -93,7 +93,6 @@ export interface SerializedGameState {
   playerTeamId: string;
   leagueId: string;
   regionId: GameState['regionId'];
-  seed: number;
   freeAgents: string[];
   freeAgentCoaches: string[];
   otherLeagueIds?: string[];

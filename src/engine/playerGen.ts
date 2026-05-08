@@ -3,7 +3,7 @@ import type {
 } from '../types';
 import {
   AGE_RANGES, QUALITY_RANGES, SALARY_RANGES, OFF_ROLE_BASE,
-  ROLE_AGENTS, ARCHETYPE_WEIGHTS,
+  ROLE_AGENTS, ARCHETYPE_WEIGHTS, MORALE_BASELINE, MORALE_DECAY_RATE,
 } from '../types';
 import type { Rng } from './rng';
 import { randInt, randFloat, randChoice, weightedChoice, clamp } from './rng';
@@ -259,6 +259,12 @@ export function developPlayer(player: Player): Player {
     trueAim:       clamp(player.trueAim + rate, 0, player.potential),
     trueGameSense: clamp(player.trueGameSense + rate * 0.5, 0, player.potential),
   };
+}
+
+// Morale mean-reversion
+export function updateMorale(player: Player): Player {
+  const next = player.morale + (MORALE_BASELINE - player.morale) * MORALE_DECAY_RATE;
+  return { ...player, morale: Math.round(next) };
 }
 
 // Annual aging
