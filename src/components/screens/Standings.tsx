@@ -12,6 +12,68 @@ const REGION_COLOR: Record<RegionId, string> = {
 };
 const ALL_REGIONS: RegionId[] = ['americas', 'emea', 'pacific', 'china'];
 
+const QUALIFY_CUTOFF = 4;
+
+function ChampionsRegionTable({ region, state }: { region: RegionId; state: GameState }) {
+  const league = state.leagues.get(`league_${region}_partner`);
+  if (!league) return null;
+
+  const teams = league.teamIds
+    .map(id => state.teams.get(id))
+    .filter(Boolean)
+    .sort((a, b) => b!.championsPoints - a!.championsPoints) as NonNullable<ReturnType<typeof state.teams.get>>[];
+
+  const color = REGION_COLOR[region];
+
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{
+        fontFamily: 'var(--font-head)', fontSize: 11, textTransform: 'uppercase',
+        letterSpacing: '0.08em', color, marginBottom: 8,
+        borderBottom: `1px solid ${color}`, paddingBottom: 6,
+      }}>
+        {REGION_LABEL[region]}
+      </div>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Team</th>
+            <th style={{ color: 'var(--amber)' }}>CP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {teams.map((team, i) => {
+            const isPlayer = team.id === state.playerTeamId;
+            const qualifies = i < QUALIFY_CUTOFF;
+            const isCutoff = i === QUALIFY_CUTOFF - 1;
+            return (
+              <tr
+                key={team.id}
+                className={isPlayer ? 'highlight' : ''}
+                style={{ borderBottom: isCutoff ? '1px dashed var(--amber)' : undefined }}
+              >
+                <td className="font-mono text-dim">{i + 1}</td>
+                <td>
+                  <span style={{
+                    fontWeight: isPlayer ? 700 : 400,
+                    color: isPlayer ? 'var(--red)' : qualifies ? 'var(--text-primary)' : 'var(--text-dim)',
+                  }}>
+                    {team.name}
+                  </span>
+                </td>
+                <td className="font-mono" style={{ color: qualifies ? 'var(--amber)' : 'var(--text-dim)', fontWeight: qualifies ? 700 : 400 }}>
+                  {team.championsPoints}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function StandingsTable({ label, rows, state, playerTeamId }: {
   label: string;
   rows: StandingsRow[];
@@ -71,10 +133,15 @@ function StandingsTable({ label, rows, state, playerTeamId }: {
   );
 }
 
-export function Standings({ state }: Props) {
-  const [activeRegion, setActiveRegion] = useState<RegionId>(state.regionId);
+type ActiveTab = RegionId | 'champions';
 
-  const league = Array.from(state.leagues.values()).find(l => l.region === activeRegion);
+export function Standings({ state }: Props) {
+  const [activeTab, setActiveTab] = useState<ActiveTab>(state.regionId);
+
+  const activeRegion = activeTab !== 'champions' ? activeTab : state.regionId;
+  const league = activeTab !== 'champions'
+    ? Array.from(state.leagues.values()).find(l => l.region === activeTab)
+    : null;
 
   const groupAIds = league?.groups?.groupA ?? [];
   const groupBIds = league?.groups?.groupB ?? [];
@@ -88,34 +155,26 @@ export function Standings({ state }: Props) {
   const rowsA = sortStandings(sorted.filter(r => groupAIds.includes(r.teamId)));
   const rowsB = sortStandings(sorted.filter(r => groupBIds.includes(r.teamId)));
 
-  const accentColor = REGION_COLOR[activeRegion];
+  const accentColor = activeTab === 'champions' ? 'var(--amber)' : REGION_COLOR[activeRegion];
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Region tabs */}
-      <div style={{
-        display: 'flex', gap: 0,
-        borderBottom: '1px solid var(--border)',
-        flexShrink: 0,
-      }}>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {ALL_REGIONS.map(r => {
-          const isActive = r === activeRegion;
+          const isActive = activeTab === r;
           const color = REGION_COLOR[r];
           return (
             <div
               key={r}
-              onClick={() => setActiveRegion(r)}
+              onClick={() => setActiveTab(r)}
               style={{
-                padding: '10px 20px',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-head)',
-                fontSize: 12,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
+                padding: '10px 20px', cursor: 'pointer',
+                fontFamily: 'var(--font-head)', fontSize: 12,
+                letterSpacing: '0.08em', textTransform: 'uppercase',
                 color: isActive ? color : 'var(--text-dim)',
                 borderBottom: isActive ? `2px solid ${color}` : '2px solid transparent',
-                marginBottom: -1,
-                transition: 'color 0.1s',
+                marginBottom: -1, transition: 'color 0.1s',
               }}
             >
               {REGION_LABEL[r]}
@@ -125,22 +184,51 @@ export function Standings({ state }: Props) {
             </div>
           );
         })}
+        <div
+          onClick={() => setActiveTab('champions')}
+          style={{
+            padding: '10px 20px', cursor: 'pointer',
+            fontFamily: 'var(--font-head)', fontSize: 12,
+            letterSpacing: '0.08em', textTransform: 'uppercase',
+            color: activeTab === 'champions' ? 'var(--amber)' : 'var(--text-dim)',
+            borderBottom: activeTab === 'champions' ? '2px solid var(--amber)' : '2px solid transparent',
+            marginBottom: -1, transition: 'color 0.1s',
+          }}
+        >
+          Champions Points
+        </div>
       </div>
 
       {/* Content */}
       <div style={{ flex: 1, padding: 16, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <h2 className="font-head" style={{ fontSize: 18, color: accentColor }}>
-          {REGION_LABEL[activeRegion]} — Season {state.season}
-        </h2>
-        {league ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-            <StandingsTable label="Group A" rows={rowsA} state={state} playerTeamId={state.playerTeamId} />
-            <StandingsTable label="Group B" rows={rowsB} state={state} playerTeamId={state.playerTeamId} />
-          </div>
+        {activeTab === 'champions' ? (
+          <>
+            <div className="flex items-baseline gap-3">
+              <h2 className="font-head" style={{ fontSize: 18, color: 'var(--amber)' }}>Champions Points</h2>
+              <span className="text-dim font-mono" style={{ fontSize: 12 }}>Top 4 per region qualify · Season {Math.ceil(state.season / 3)}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 24 }}>
+              {ALL_REGIONS.map(r => (
+                <ChampionsRegionTable key={r} region={r} state={state} />
+              ))}
+            </div>
+          </>
         ) : (
-          <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-            No league data for this region.
-          </div>
+          <>
+            <h2 className="font-head" style={{ fontSize: 18, color: accentColor }}>
+              {REGION_LABEL[activeRegion]} — Season {state.season}
+            </h2>
+            {league ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <StandingsTable label="Group A" rows={rowsA} state={state} playerTeamId={state.playerTeamId} />
+                <StandingsTable label="Group B" rows={rowsB} state={state} playerTeamId={state.playerTeamId} />
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                No league data for this region.
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
