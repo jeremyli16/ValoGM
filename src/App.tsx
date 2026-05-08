@@ -7,7 +7,7 @@ import { NewGame } from './components/screens/NewGame';
 import { Dashboard } from './components/screens/Dashboard';
 import { Roster } from './components/screens/Roster';
 import { TransferMarket } from './components/screens/TransferMarket';
-import { MatchDay } from './components/screens/MatchDay';
+import { MatchDay } from './components/screens/Matchday';
 import { Standings } from './components/screens/Standings';
 import { Schedule } from './components/screens/Schedule';
 import { Playoffs } from './components/screens/Playoffs';
