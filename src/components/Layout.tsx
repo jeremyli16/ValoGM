@@ -68,16 +68,9 @@ export function Layout({ state, active, onNav, onAdvanceWeek, onResetGame, child
   const [confirmReset, setConfirmReset] = useState(false);
   const unread = state.notifications.filter(n => !n.read).length;
   const team = state.teams.get(state.playerTeamId);
-  const renewalsDue = (() => {
-    if (!team) return 0;
-    const ids = [...(team.rosterIds ?? []), ...(team.subIds ?? [])];
-    return ids.filter(id => {
-      const p = state.players.get(id);
-      if (!p?.contractId) return false;
-      const c = state.contracts.get(p.contractId);
-      return c && c.endSeason === state.season;
-    }).length;
-  })();
+  const renewalsDue = state.phase === 'offseason'
+    ? state.pendingDecisions.filter(d => d.type === 'contract_renewal').length
+    : 0;
   const tournamentLabel = tournamentNavLabel(state);
 
   return (
@@ -149,14 +142,14 @@ export function Layout({ state, active, onNav, onAdvanceWeek, onResetGame, child
                       }} />
                     )}
                     {label}
-                    {item.id === 'dashboard' && unread > 0 && (
+                    {item.id === 'dashboard' && unread > 0 && !isActive && (
                       <span style={{
                         background: 'var(--red)', color: '#fff',
                         fontFamily: 'var(--font-mono)', fontSize: 10,
                         padding: '1px 5px', borderRadius: 10,
                       }}>{unread}</span>
                     )}
-                    {item.id === 'finances' && renewalsDue > 0 && (
+                    {item.id === 'finances' && renewalsDue > 0 && !isActive && (
                       <span style={{
                         background: 'var(--amber)', color: '#000',
                         fontFamily: 'var(--font-mono)', fontSize: 10,
