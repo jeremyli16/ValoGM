@@ -754,7 +754,7 @@ const ALL_PLAYOFF_ROUNDS = ['UR1A', 'UR1B', 'LR1A', 'LR1B', 'USF1', 'USF2', 'LR2
 function simFullPlayoffBracket(
   bracket: import('../types').PlayoffBracket,
   state: GameState,
-  rng: import('./rng').SeededRng,
+  rng: import('./rng').Rng,
 ): void {
   for (const roundId of ALL_PLAYOFF_ROUNDS) {
     const match = bracket.matches.find(m => m.round === roundId);
