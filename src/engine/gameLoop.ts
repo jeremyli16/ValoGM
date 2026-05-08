@@ -162,22 +162,46 @@ function applyPracticeAllocation(state: GameState): GameState {
 
 // ─── Agent Patch ──────────────────────────────────────────────────────────────
 
-function applyAgentPatch(state: GameState): GameState {
+function applyAgentPatch(state: GameState, isMajorPatch: boolean): GameState {
   const rng = Math.random;
   const totalSlots = Object.values(state.agentPickCounts).reduce((a, b) => a + b, 0);
 
   const nerfs: string[] = [];
   const buffs: string[] = [];
 
+  const allAgents = Object.keys(state.agentMeta);
+
+  // Minor patch: pick 3–5 agents. Weight toward outliers (high/low pick rate or strength).
+  const patchTargets: Set<string> = new Set();
+  if (!isMajorPatch) {
+    const count = 3 + Math.floor(rng() * 3); // 3, 4, or 5
+    const weights = allAgents.map(agent => {
+      const pickRate = totalSlots > 0 ? (state.agentPickCounts[agent] ?? 0) / totalSlots : 1 / 24;
+      const str = state.agentMeta[agent];
+      return Math.abs(pickRate - 0.04) * 10 + Math.abs(str - 50) / 50 + 0.1;
+    });
+    const totalW = weights.reduce((a, b) => a + b, 0);
+    while (patchTargets.size < count) {
+      let r = rng() * totalW;
+      for (let i = 0; i < allAgents.length; i++) {
+        r -= weights[i];
+        if (r <= 0) { patchTargets.add(allAgents[i]); break; }
+      }
+    }
+  }
+
   for (const [agent, currentStrength] of Object.entries(state.agentMeta)) {
+    if (!isMajorPatch && !patchTargets.has(agent)) continue;
+
     const pickCount = state.agentPickCounts[agent] ?? 0;
     const pickRate = totalSlots > 0 ? pickCount / totalSlots : 1 / 24;
 
-    let delta = randFloat(rng, -8, 8);
-    if (pickRate > 0.12) delta -= randFloat(rng, 8, 18);
-    if (pickRate < 0.02) delta += randFloat(rng, 8, 18);
-    if (currentStrength > 80) delta -= randFloat(rng, 5, 15);
-    if (currentStrength < 20) delta += randFloat(rng, 5, 15);
+    const noiseRange = isMajorPatch ? 8 : 5;
+    let delta = randFloat(rng, -noiseRange, noiseRange);
+    if (pickRate > 0.12) delta -= randFloat(rng, isMajorPatch ? 8 : 5, isMajorPatch ? 18 : 12);
+    if (pickRate < 0.02) delta += randFloat(rng, isMajorPatch ? 8 : 5, isMajorPatch ? 18 : 12);
+    if (currentStrength > 80) delta -= randFloat(rng, isMajorPatch ? 5 : 3, isMajorPatch ? 15 : 8);
+    if (currentStrength < 20) delta += randFloat(rng, isMajorPatch ? 5 : 3, isMajorPatch ? 15 : 8);
 
     const newStrength = clamp(currentStrength + delta, 15, 90);
     const actualDelta = newStrength - currentStrength;
@@ -578,7 +602,7 @@ function checkPhaseTransition(state: GameState): GameState {
     });
 
     // Apply agent patch (pick-rate + threshold correction, map drift, notification)
-    state = applyAgentPatch(state);
+    state = applyAgentPatch(state, state.season % 3 === 1);
 
     // Rotate map pool (60% no change, 30% swap 1, 10% swap 2)
     state = rotateMapPool(state);
