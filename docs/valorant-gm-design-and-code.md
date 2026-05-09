@@ -1122,8 +1122,6 @@ All 11 screens are live and wired to real IndexedDB data. The full split → Mas
 
 **What remains to build:**
 - **Scouting screen:** active targeted scouting of opponent players; `scoutedRating` updates as players develop post-generation (passive confidence tick via coach is in place)
-- **Chemistry system:** `Team.chemistry` is tracked but unused; planned as ×(1 + chemistry/2000) modifier on team synergy bonus, ±2/week stable / −5 per transfer
 - **Challengers simulation:** schedule + standings for the 8 challengers teams per region; breakout players surfacing as transfer targets (no promotion/relegation)
-- **Injuries:** `Player` has no injury flag; all players always available
 - **Sponsorships / prize money:** `Organization.sponsorIncome` and `prizeEarnings` stored but not wired to the budget loop
 - **Web Worker integration:** match sim runs synchronously on the main thread; moving to a Worker keeps the UI responsive during long auto-sim sequences
