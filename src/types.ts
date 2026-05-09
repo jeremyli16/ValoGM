@@ -380,6 +380,8 @@ export interface GameState {
   agentMapMeta: Record<string, Record<string, number>>;
   agentPickCounts: Record<string, number>;
 
+  challengersLeagueIds: string[];
+
   dirtyPlayers: Set<string>;
   dirtyMatches: Set<string>;
   dirtyCoaches: Set<string>;
@@ -435,7 +437,7 @@ export const LEAGUE_FORMATS: Record<LeagueTier, LeagueFormat> = {
     teamsPerLeague: 8,
     playoffTeams: 2,
     playoffBye: 0,
-    regularSeasonWeeks: 6,
+    regularSeasonWeeks: 5,
     regularSeason: 'bo3',
   },
 };

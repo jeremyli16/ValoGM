@@ -15,13 +15,21 @@ export function computeBuyout(
   return Math.round(contract.salary * yearsLeft * skillMod * benchMod / 10_000) * 10_000;
 }
 
+function isChallengersPlayer(player: Player, state: GameState): boolean {
+  if (!player.teamId) return false;
+  const team = state.teams.get(player.teamId);
+  return team ? state.challengersLeagueIds.includes(team.leagueId) : false;
+}
+
 function evaluateOffer(
   offer: TransferOffer,
   player: Player,
   state: GameState,
   rng: () => number,
 ): { status: TransferStatus; counterSalary?: number } {
-  if (player.teamId) {
+  const challengers = isChallengersPlayer(player, state);
+
+  if (player.teamId && !challengers) {
     const sellingTeam = state.teams.get(player.teamId);
     const contract = player.contractId ? state.contracts.get(player.contractId) : undefined;
     if (sellingTeam && contract) {
@@ -45,8 +53,9 @@ function evaluateOffer(
   const moraleScore = (75 - player.morale) * 0.3;
   const freeAgentBonus = player.teamId === null ? 35 : 0;
   const benchBonus = currentTeam?.subIds.includes(player.id) ? 10 : 0;
+  const promotionBonus = challengers ? 25 : 0;
 
-  const prob = Math.max(5, Math.min(95, salaryScore + teamScore + moraleScore + freeAgentBonus + benchBonus));
+  const prob = Math.max(5, Math.min(95, salaryScore + teamScore + moraleScore + freeAgentBonus + benchBonus + promotionBonus));
 
   if (rng() * 100 < prob) return { status: 'accepted' };
 

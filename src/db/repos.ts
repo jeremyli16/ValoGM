@@ -250,6 +250,7 @@ export async function persistGameState(state: GameState): Promise<void> {
     freeAgents: state.freeAgents,
     freeAgentCoaches: state.freeAgentCoaches,
     otherLeagueIds: state.otherLeagueIds,
+    challengersLeagueIds: state.challengersLeagueIds,
     otherPlayoffBrackets: state.otherPlayoffBrackets.size > 0
       ? Object.fromEntries(state.otherPlayoffBrackets)
       : undefined,
@@ -313,10 +314,14 @@ export async function persistGameState(state: GameState): Promise<void> {
     state.dirtyCoaches.clear();
   }
 
-  // 5. All teams (roster/morale/record changes are frequent and cheap to overwrite)
+  // 5. All teams + orgs (roster/morale/budget changes)
   const allTeams: Team[] = [];
   state.teams.forEach(t => allTeams.push(t));
   await teamRepo.putMany(allTeams);
+
+  const allOrgs: Organization[] = [];
+  state.orgs.forEach(o => allOrgs.push(o));
+  await orgRepo.putMany(allOrgs);
 
   // 6. All transfer offers (upsert keeps history, replaces status changes)
   if (state.transferOffers.length > 0) {
@@ -425,6 +430,7 @@ export async function loadGameState(): Promise<Partial<GameState> | null> {
     coaches: coachMap,
     freeAgentCoaches: saved.freeAgentCoaches ?? [],
     otherLeagueIds: saved.otherLeagueIds ?? [],
+    challengersLeagueIds: saved.challengersLeagueIds ?? [],
     otherPlayoffBrackets: new Map(Object.entries(saved.otherPlayoffBrackets ?? {})),
     activeInternationalTournament: saved.activeInternationalTournament ?? null,
     tournamentHistory: saved.tournamentHistory ?? [],

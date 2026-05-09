@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { GameState, Player, PlayerRole, Contract, Decision } from '../../types';
+import type { GameState, Player, Contract, Decision } from '../../types';
 import { RoleBadge } from '../shared/RoleBadge';
 import { BENCH_SALARY_FACTOR } from '../../types';
 
@@ -254,6 +254,33 @@ export function Finances({ state, onSubmitRenewal }: Props) {
   return (
     <div className="scroll-area" style={{ height: '100%', padding: '20px 24px' }}>
 
+      {/* ── Budget balance ── */}
+      {org && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="text-dim text-xs font-head uppercase" style={{ letterSpacing: '0.08em', marginBottom: 10 }}>
+            Organization Budget
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            <div className="card" style={{ padding: '12px 14px' }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>CURRENT BUDGET</div>
+              <div className="font-mono" style={{ fontSize: 18, color: org.budget >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+                ${org.budget.toLocaleString()}
+              </div>
+            </div>
+            <div className="card" style={{ padding: '12px 14px' }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>SPONSOR INCOME</div>
+              <div className="font-mono" style={{ fontSize: 16, color: 'var(--teal)' }}>${org.sponsorIncome.toLocaleString()}</div>
+              <div className="text-dim" style={{ fontSize: 10 }}>/yr</div>
+            </div>
+            <div className="card" style={{ padding: '12px 14px' }}>
+              <div style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.08em', color: 'var(--text-dim)', marginBottom: 6 }}>PRIZE EARNINGS</div>
+              <div className="font-mono" style={{ fontSize: 16, color: 'var(--amber)' }}>${org.prizeEarnings.toLocaleString()}</div>
+              <div className="text-dim" style={{ fontSize: 10 }}>total</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Payroll summary ── */}
       <div style={{ marginBottom: 24 }}>
         <div className="text-dim text-xs font-head uppercase" style={{ letterSpacing: '0.08em', marginBottom: 12 }}>
@@ -278,26 +305,18 @@ export function Finances({ state, onSubmitRenewal }: Props) {
           ))}
         </div>
 
-        {income > 0 && (
-          <div className="flex gap-3 items-center" style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
-            <div>
-              <span className="text-dim text-xs font-head uppercase">Sponsor Income </span>
-              <span className="font-mono text-xs">${org?.sponsorIncome.toLocaleString()}/yr</span>
-            </div>
-            <span className="text-dim">·</span>
-            <div>
-              <span className="text-dim text-xs font-head uppercase">Prize Earnings </span>
-              <span className="font-mono text-xs">${org?.prizeEarnings.toLocaleString()}</span>
-            </div>
-            <span className="text-dim">·</span>
-            <div>
-              <span className="text-dim text-xs font-head uppercase">Net </span>
-              <span className="font-mono text-xs" style={{ color: net >= 0 ? 'var(--teal)' : 'var(--red)' }}>
-                {net >= 0 ? '+' : ''}${net.toLocaleString()}/yr
-              </span>
-            </div>
+        <div className="flex gap-3 items-center" style={{ marginTop: 10, padding: '8px 12px', background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+          <div>
+            <span className="text-dim text-xs font-head uppercase">Annual Net </span>
+            <span className="font-mono text-xs" style={{ color: net >= 0 ? 'var(--teal)' : 'var(--red)' }}>
+              {net >= 0 ? '+' : ''}${net.toLocaleString()}/yr
+            </span>
           </div>
-        )}
+          <span className="text-dim">·</span>
+          <div>
+            <span className="text-dim text-xs font-head uppercase">Applied at start of each calendar year</span>
+          </div>
+        </div>
       </div>
 
       {/* ── Pending renewals ── */}

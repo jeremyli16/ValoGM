@@ -83,16 +83,17 @@ function acceptanceLikelihood(
   return Math.round(Math.max(5, Math.min(95, salaryScore + prestigeScore)));
 }
 
-function PlayerCard({ player, roleRatings, onOffer, hasPendingOffer, isLocked, buyout }: {
+function PlayerCard({ player, roleRatings, onOffer, hasPendingOffer, isLocked, buyout, isChallengers }: {
   player: Player;
   roleRatings: DisplayRoleRating[];
   onOffer: (p: Player) => void;
   hasPendingOffer?: boolean;
   isLocked?: boolean;
   buyout?: number;
+  isChallengers?: boolean;
 }) {
   const [ratingsExpanded, setRatingsExpanded] = useState(false);
-  const isFree = !player.teamId;
+  const isFree = !player.teamId || isChallengers;
   const accentColor = isFree ? 'var(--teal)' : 'var(--amber)';
   const primaryRating = roleRatings.find(r => r.role === player.primaryRole);
   const displayRatings = ratingsExpanded ? roleRatings : (primaryRating ? [primaryRating] : roleRatings.slice(0, 1));
@@ -107,6 +108,9 @@ function PlayerCard({ player, roleRatings, onOffer, hasPendingOffer, isLocked, b
             <div style={{ fontWeight: 600, fontSize: 13 }}>{player.alias}</div>
             <div className="text-dim text-xs">{player.firstName} {player.lastName}</div>
           </div>
+          {isChallengers && (
+            <span style={{ fontSize: 9, fontFamily: 'var(--font-head)', letterSpacing: '0.06em', color: 'var(--teal)', border: '1px solid var(--teal)', padding: '1px 5px' }}>TIER 2</span>
+          )}
         </div>
         <div className="flex gap-2 items-center">
           <div style={{ textAlign: 'center', minWidth: 28 }}>
@@ -115,7 +119,7 @@ function PlayerCard({ player, roleRatings, onOffer, hasPendingOffer, isLocked, b
           </div>
           <div className="text-right">
             <div className="font-mono text-xs">${player.salary.toLocaleString()}/yr</div>
-            {buyout !== undefined && buyout > 0 && (
+            {!isChallengers && buyout !== undefined && buyout > 0 && (
               <div className="font-mono text-xs" style={{ color: 'var(--amber)' }}>Fee: ${buyout.toLocaleString()}</div>
             )}
             <div className="text-dim text-xs">{player.nationality} · Age {player.age}</div>
@@ -205,7 +209,10 @@ function OfferModal({ player, state, onClose, onSend }: {
   // Compute fixed buyout for contracted players
   const sellingTeam = player.teamId ? state.teams.get(player.teamId) : null;
   const contract = player.contractId ? state.contracts.get(player.contractId) : undefined;
-  const requiredFee = (sellingTeam && contract)
+  const isChallengersPlayer = player.teamId
+    ? state.challengersLeagueIds.includes(state.teams.get(player.teamId)?.leagueId ?? '')
+    : false;
+  const requiredFee = (sellingTeam && contract && !isChallengersPlayer)
     ? computeBuyout(player, contract, sellingTeam, state.season) : 0;
   const isBenched = sellingTeam?.subIds.includes(player.id) ?? false;
 
@@ -226,7 +233,7 @@ function OfferModal({ player, state, onClose, onSend }: {
           <button className="btn" onClick={onClose}>✕</button>
         </div>
 
-        {player.teamId ? (
+        {player.teamId && !isChallengersPlayer ? (
           <div style={{ padding: '8px 10px', background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
             <div className="flex justify-between items-center">
               <span className="text-dim text-xs font-head uppercase">Required Transfer Fee</span>
@@ -243,7 +250,7 @@ function OfferModal({ player, state, onClose, onSend }: {
           </div>
         ) : (
           <div style={{ padding: '8px 10px', background: 'var(--bg-2)', border: '1px solid var(--border)' }} className="text-dim text-xs">
-            Free agent — no transfer fee required
+            {isChallengersPlayer ? 'Tier 2 player — no transfer fee required' : 'Free agent — no transfer fee required'}
           </div>
         )}
 
@@ -408,19 +415,31 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
 
   const isOffseason = state.phase === 'offseason';
 
+  const challengersTeamIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const cid of state.challengersLeagueIds) {
+      const cl = state.leagues.get(cid);
+      if (cl) cl.teamIds.forEach(id => ids.add(id));
+    }
+    return ids;
+  }, [state.challengersLeagueIds, state.leagues]);
+
   const allPlayers = useMemo(() => {
     const out: Player[] = [];
     state.players.forEach(p => {
       if (p.teamId === state.playerTeamId) return;
-      // During regular season / playoffs, hide active-rostered players (bench OK)
-      if (!isOffseason && p.teamId) {
-        const team = state.teams.get(p.teamId);
-        if (team && team.rosterIds.includes(p.id)) return;
+      if (p.teamId) {
+        const isChallengers = challengersTeamIds.has(p.teamId);
+        // Challengers players always visible; partnership active-roster hidden until offseason
+        if (!isChallengers && !isOffseason) {
+          const team = state.teams.get(p.teamId);
+          if (team && team.rosterIds.includes(p.id)) return;
+        }
       }
       out.push(p);
     });
     return out.sort((a, b) => (b.aim + b.gameSense) - (a.aim + a.gameSense));
-  }, [state, isOffseason]);
+  }, [state, isOffseason, challengersTeamIds]);
 
   const filtered = useMemo(() => {
     return allPlayers.filter(p => {
@@ -571,13 +590,14 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
               <div className="text-dim text-xs">{sorted.length} players found</div>
               <div className="scroll-area flex-col gap-2" style={{ flex: 1 }}>
                 {sorted.map(p => {
+                  const isChall = p.teamId ? challengersTeamIds.has(p.teamId) : false;
                   const roleRatings = ROLES
                     .map(role => state.roleRatings.get(`${p.id}:${role}`))
                     .filter((rr): rr is PlayerRoleRatingRecord => !!rr)
                     .map(rr => getDisplayRoleRating(rr, effectiveScouting));
                   const sellingTeam = p.teamId ? state.teams.get(p.teamId) : undefined;
                   const contract = p.contractId ? state.contracts.get(p.contractId) : undefined;
-                  const buyout = (sellingTeam && contract)
+                  const buyout = (sellingTeam && contract && !isChall)
                     ? computeBuyout(p, contract, sellingTeam, state.season) : undefined;
                   return (
                     <PlayerCard
@@ -588,6 +608,7 @@ export function TransferMarket({ state, onHireCoach, onFireCoach, onMakeOffer, l
                       hasPendingOffer={pendingOfferPlayerIds.has(p.id)}
                       isLocked={outgoingBlocked || lockedPlayerIds?.has(p.id)}
                       buyout={buyout}
+                      isChallengers={isChall}
                     />
                   );
                 })}

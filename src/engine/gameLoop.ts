@@ -33,6 +33,7 @@ export { computeBuyout, releasePlayer, makeTransferOffer } from './transfers';
 export { submitRenewalOffer } from './contracts';
 export { autoFillRoster } from './rosterManager';
 
+
 function applyMatchMorale(
   team: Team,
   players: Map<string, Player>,
@@ -497,6 +498,34 @@ function checkPhaseTransition(state: GameState): GameState {
     const seasonRec = buildSeasonRecord(state, state.season);
     if (seasonRec) state.seasonHistory = [...state.seasonHistory, seasonRec];
 
+    // Prize money based on playoff placement
+    const bracket = state.playoffBracket;
+    const gf = bracket.matches.find(m => m.round === 'GF');
+    const lf = bracket.matches.find(m => m.round === 'LF');
+    const uf = bracket.matches.find(m => m.round === 'UF');
+    const placements: [string | null, number][] = [
+      [bracket.champion, 1_000_000],
+      [gf?.result ? (gf.result.winner === 'A' ? gf.teamBId : gf.teamAId) : null, 400_000],
+      [lf?.result ? (lf.result.winner === 'A' ? lf.teamBId : lf.teamAId) : null, 150_000],
+      [uf?.result ? (uf.result.winner === 'A' ? uf.teamBId : uf.teamAId) : null, 150_000],
+    ];
+    for (const [teamId, prize] of placements) {
+      if (!teamId) continue;
+      const team = state.teams.get(teamId);
+      if (!team) continue;
+      const org = [...state.orgs.values()].find(o => o.teamId === teamId);
+      if (!org) continue;
+      state.orgs.set(org.id, { ...org, budget: org.budget + prize, prizeEarnings: org.prizeEarnings + prize });
+      if (teamId === state.playerTeamId) {
+        state.notifications.push({
+          id: notifId(), type: 'playoff',
+          title: 'Prize Money Awarded',
+          body: `$${prize.toLocaleString()} prize money added to org budget.`,
+          week: state.week, read: false,
+        });
+      }
+    }
+
     // Award playoff Champions Points for all regions
     const isSplit3 = state.season % 3 === 0;
     awardPlayoffChampionsPoints(state, state.playoffBracket, isSplit3);
@@ -607,8 +636,8 @@ function checkPhaseTransition(state: GameState): GameState {
     // Rotate map pool (60% no change, 30% swap 1, 10% swap 2)
     state = rotateMapPool(state);
 
-    // Generate new schedule for all 4 partnership leagues
-    const allLeagueIds = [state.leagueId, ...state.otherLeagueIds];
+    // Generate new schedules for all partnership + challengers leagues
+    const allLeagueIds = [state.leagueId, ...state.otherLeagueIds, ...state.challengersLeagueIds];
     for (const lid of allLeagueIds) {
       const lg = state.leagues.get(lid);
       if (!lg) continue;
@@ -618,6 +647,22 @@ function checkPhaseTransition(state: GameState): GameState {
       generateSchedule(newLeague, state.season, rng).forEach(m => state.matches.set(m.id, m));
       initStandings(newLeague, state.season).forEach(row => {
         state.standings.set(`${row.leagueId}:${row.season}:${row.teamId}`, row);
+      });
+    }
+
+    // Sponsorship income (once per calendar year = when new season is a split-1)
+    if (state.season % 3 === 1) {
+      state.orgs.forEach((org, orgId) => {
+        const team = state.teams.get(org.teamId);
+        if (!team) return;
+        const annualPayroll = [...team.rosterIds, ...team.subIds].reduce((sum, pid) => {
+          const p = state.players.get(pid);
+          const c = p?.contractId ? state.contracts.get(p.contractId) : null;
+          return sum + (c?.salary ?? 0);
+        }, 0) + (team.headCoachId ? (state.coaches.get(team.headCoachId)?.salary ?? 0) : 0)
+          + (team.assistantCoachId ? (state.coaches.get(team.assistantCoachId)?.salary ?? 0) : 0);
+        const newBudget = org.budget + org.sponsorIncome - annualPayroll;
+        state.orgs.set(orgId, { ...org, budget: newBudget });
       });
     }
 
@@ -768,6 +813,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number): GameState 
 
   let playerLeagueId = '';
   const otherLeagueIds: string[] = [];
+  const challengersLeagueIds: string[] = [];
 
   for (const region of ALL_REGIONS) {
     const init = initLeague(region, Math.random);
@@ -784,6 +830,8 @@ export function createNewGame(regionId: RegionId, teamIndex: number): GameState 
     init.coaches.forEach(c => coaches.set(c.id, c));
     init.players.filter(p => !p.teamId).forEach(p => freeAgents.push(p.id));
     init.coaches.filter(c => !c.teamId).forEach(c => freeAgentCoaches.push(c.id));
+
+    challengersLeagueIds.push(init.challengers.id);
 
     if (region === regionId) {
       playerLeagueId = init.league.id;
@@ -831,6 +879,7 @@ export function createNewGame(regionId: RegionId, teamIndex: number): GameState 
     notifications: [],
     transferOffers: [],
     playoffBracket: null,
+    challengersLeagueIds,
     dirtyPlayers: new Set(),
     dirtyMatches: new Set(),
     dirtyCoaches: new Set(),

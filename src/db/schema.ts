@@ -96,6 +96,7 @@ export interface SerializedGameState {
   freeAgents: string[];
   freeAgentCoaches: string[];
   otherLeagueIds?: string[];
+  challengersLeagueIds?: string[];
   otherPlayoffBrackets?: Record<string, PlayoffBracket>;
   activeInternationalTournament?: InternationalTournament | null;
   tournamentHistory?: InternationalTournament[];

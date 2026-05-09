@@ -222,9 +222,42 @@ export function generateSchedule(
 ): ScheduledMatch[] {
   const matches: ScheduledMatch[] = [];
   const { groups, format } = league;
-  if (!groups) return matches;
 
   let matchIdCounter = 0;
+
+  if (!groups) {
+    // Single-group round-robin for leagues without groups (challengers)
+    const teams = shuffle(rng, [...league.teamIds]);
+    const n = teams.length;
+    if (n < 2) return matches;
+    const rotatable = teams.slice(1);
+    const numRounds = Math.min(format.regularSeasonWeeks, n - 1);
+    for (let round = 0; round < numRounds; round++) {
+      const week = round + 1;
+      const act = week <= 2 ? 1 : week <= 4 ? 2 : 3;
+      const roundPairs: [string, string][] = [[teams[0], rotatable[n - 2]]];
+      for (let i = 0; i < Math.floor((n - 1) / 2); i++) {
+        roundPairs.push([rotatable[i], rotatable[n - 2 - i - 1]]);
+      }
+      for (const [a, b] of roundPairs) {
+        matches.push({
+          id: `m${season}_${league.id}_${matchIdCounter++}`,
+          leagueId: league.id,
+          season,
+          act,
+          week,
+          teamAId: a,
+          teamBId: b,
+          format: format.regularSeason,
+          result: null,
+          isPlayoff: false,
+          playoffRound: null,
+        });
+      }
+      rotatable.unshift(rotatable.pop()!);
+    }
+    return matches;
+  }
 
   for (const group of [groups.groupA, groups.groupB]) {
     // Shuffle group order so matchups vary across seasons
