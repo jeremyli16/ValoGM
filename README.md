@@ -1,6 +1,6 @@
 # ValoGM
 
-A Valorant team management simulator. Build a franchise in one of four regional leagues, recruit players, manage your roster, and compete through a double-elimination playoff bracket.
+A Valorant team management simulator. Build a franchise in one of four regional leagues, recruit players, manage your roster, and compete win tournaments.
 
 **[Play it live →](https://valo-gm.vercel.app)**
 
